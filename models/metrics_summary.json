@@ -1,0 +1,20 @@
+{
+    "Ridge_Baseline": {
+        "MAE": 1.057,
+        "RMSE": 1.858,
+        "R2": 0.768,
+        "Tier_Accuracy_Pct": 79.81
+    },
+    "HistGradientBoosting": {
+        "MAE": 0.827,
+        "RMSE": 1.554,
+        "R2": 0.838,
+        "Tier_Accuracy_Pct": 85.59
+    },
+    "RandomForest": {
+        "MAE": 0.868,
+        "RMSE": 1.631,
+        "R2": 0.822,
+        "Tier_Accuracy_Pct": 84.92
+    }
+}
