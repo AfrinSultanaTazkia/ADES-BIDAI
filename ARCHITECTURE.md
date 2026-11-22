@@ -1,141 +1,262 @@
-# ADES BIDAI: System Architecture & Design Document
-
-**System Name**: ADES BIDAI (AI-Powered Urban Dengue Outbreak Early-Warning System)  
-**Version**: 1.0 (Preliminary Hackathon Qualifier Release)  
-**Target Domain**: Public Health Dengue Outbreak Surveillance & Municipal Vector Control  
-
----
+# ADES BIDAI — System Architecture
 
 ## 1. System Overview
 
-ADES BIDAI is a machine learning early-warning surveillance engine designed to predict hyper-local dengue outbreak surges across Bangladeshi urban centers (Dhaka North, Dhaka South, Chattogram, Gazipur, and Narayanganj). 
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         ADES BIDAI                              │
+│         AI-Based Dengue Outbreak Prediction & Alert System      │
+└─────────────────────────────────────────────────────────────────┘
 
-Unlike traditional reactive spraying operations that respond *after* emergency wards reach maximum capacity, ADES BIDAI bridges the critical **2-to-4-week biological vector breeding clock**—the delay between heavy precipitation, stagnant water accumulation in urban drainage bottlenecks, mosquito larval emergence, viral incubation, and human hospital admissions.
-
----
-
-## 2. End-to-End System Data Flow Diagram
-
-```mermaid
-flowchart TD
-    subgraph Data_Ingestion["1. Data Ingestion & Preprocessing"]
-        A["Raw Longitudinal Weather & Ward CSV (31,320 rows)"] --> B["src/data_processing.py"]
-        B --> C["Type Casting, Date Parsing & Ward Chronological Ordering"]
-    end
-
-    subgraph Feature_Pipeline["2. Multi-Week Lag & Vulnerability Pipeline"]
-        C --> D["src/feature_engineering.py"]
-        D --> E["Grouped Weather Lags: rainfall_lag_1w to 4w, temp/humidity lags"]
-        D --> F["Rolling Windows: 2w & 4w rolling mean, 3w & 4w cumulative sum"]
-        D --> G["Urban Interactions: rain_lag2_x_waterlog, rain_lag3_x_unsanitary"]
-        D --> H["Temporal Seasonality: Monsoon flag, sin/cos cyclical calendar"]
-    end
-
-    subgraph Model_Validation["3. Chronological Validation & Model Selection"]
-        E & F & G & H --> I["Chronological Train/Test Split Engine"]
-        I -->|"Train: 2016-02 to 2023-12 (80%)"| J["Model Training & Tuning (HistGradientBoosting, RF, Ridge)"]
-        I -->|"Holdout: 2024-01 to 2025-12 (20%)"| K["Out-of-Time Generalization Evaluation (MAE, RMSE, R²)"]
-        J --> L["Serialized Winning Model Artifact (models/dengue_outbreak_model.joblib)"]
-    end
-
-    subgraph Prediction_Engine["4. Inference & Dynamic Risk Tiering"]
-        L --> M["src/prediction.py"]
-        M --> N["Dynamic Quantile Classifier (Low < 1.5, Medium < 4.0, High < 10.0, Critical >= 10.0)"]
-        M --> O["Local Feature Driver & Contribution Breakdown"]
-    end
-
-    subgraph Interactive_UI["5. Public Health Web Dashboard"]
-        N & O --> P["app.py (Streamlit Web Dashboard)"]
-        P --> Q["Interactive Ward & Time Window Selector"]
-        P --> R["Color-Coded Risk Badge & Case Forecast"]
-        P --> S["Feature Driver Contribution Horizontal Bar Chart"]
-        P --> T["Vector Breeding Clock Rainfall Lag Progression"]
-        P --> U["City-Wide Ward Risk Ranking Table"]
-    end
-
-    classDef primary fill:#e3f2fd,stroke:#1565c0,stroke-width:2px;
-    classDef highlight fill:#ffebee,stroke:#c62828,stroke-width:2px;
-    classDef success fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
-    class A,C,D,P primary;
-    class L,N,O success;
-    class K,R,S highlight;
+┌──────────────┐     HTTP REST      ┌──────────────────────────┐
+│  Streamlit   │ ◄────────────────► │  FastAPI Backend         │
+│  Dashboard   │   localhost:8000   │  api.py                  │
+│  app.py +    │                    │  - /api/summary          │
+│  pages/*.py  │                    │  - /api/wards            │
+│  port 8501   │                    │  - /api/predict          │
+└──────┬───────┘                    │  - /api/weather          │
+       │                            │  - /api/metrics          │
+       │ Fallback (local mode)      │  - /api/environmental    │
+       ▼                            └──────────┬───────────────┘
+┌──────────────┐                              │
+│  src/ modules│ ◄────────────────────────────┘
+│  - data_proc │  loads at startup
+│  - feat_eng  │
+│  - prediction│
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐    ┌────────────────────────────────┐
+│   data/      │    │  models/                       │
+│   *.csv      │    │  dengue_outbreak_model.joblib  │
+│  31,320 rows │    │  metrics_summary.json          │
+└──────────────┘    └────────────────────────────────┘
 ```
 
 ---
 
-## 3. The Multi-Week Weather Lag & Vector Breeding Pipeline
+## 2. Data Flow
 
-### Biological Foundation
-Aedes aegypti breeding and dengue virus transmission follow a strict non-linear biological progression:
-1. **Weeks 4 to 3 (Egg to Pupa)**: Rain falls into artificial containers and clogged drains; eggs hatch into larvae (7–10 days).
-2. **Week 2 (Adult Emergence)**: Pupae mature into adult mosquitoes; warm temperatures (\(25^\circ\text{C} - 32^\circ\text{C}\)) accelerate metabolic activity.
-3. **Week 1 (Dispersion & Biting)**: Adult female mosquitoes feed on human hosts in crowded neighborhoods.
-4. **Week 0 (Clinical Surge)**: After an intrinsic incubation period of 4–10 days inside humans, fever spikes appear in clinics.
+```
+                        DATA PIPELINE
+                        ============
 
-### Engineered Mathematical Lags
-Our pipeline computes multi-week grouped lags strictly within each `ward_id`:
-- **Single-Week Lags**: `rainfall_lag_1w`, `rainfall_lag_2w`, `rainfall_lag_3w`, `rainfall_lag_4w` using `df.groupby('ward_id')['rainfall_mm'].shift(n)`.
-- **Cumulative Pools**: `rainfall_roll_sum_4w` and `rainfall_roll_sum_2w` to measure sustained water accumulation.
-- **Microclimate Interaction Terms**:
-  $$\text{rain\_lag2\_x\_waterlog} = \text{rainfall\_lag\_2w} \times \text{water\_logging\_risk\_index}$$
-  $$\text{rain\_lag3\_x\_unsanitary} = \text{rainfall\_lag\_3w} \times (1.0 - \text{sanitation\_score})$$
-  $$\text{density\_exposure} = \left(\frac{\text{population\_density\_sqkm}}{50000}\right) \times \text{composite\_vulnerability}$$
-
----
-
-## 4. Chronological Validation Split Rationale
-
-### The Danger of Random K-Fold Cross-Validation
-Standard random train-test splitting or randomized K-Fold cross-validation is fundamentally invalid for epidemic surveillance datasets. In a random split, observations from the middle of an outbreak epidemic curve leak into the training set, allowing the model to "peek into the future" and artificially inflate evaluation metrics while completely failing during live deployment.
-
-### Our Out-of-Time Holdout Formulation
-We implement a strictly non-random **chronological split**:
-- **Historical Training Window**: `2016-02-01` to `2023-12-25` (24,780 records; 8 full continuous years).
-- **Out-of-Time Test/Validation Window**: `2024-01-01` to `2025-12-29` (6,300 records; 2 full unseen years).
-
-This setup rigorously tests the model's ability to forecast across unseen annual monsoon surges without temporal data leakage.
-
----
-
-## 5. Model Selection & Comparative Rationale
-
-### Model Architecture Comparison (Holdout Set: 2024–2025)
-
-| Candidate Model | MAE (Cases) | RMSE | \(R^2\) Score | Tier Accuracy (%) | Technical Trade-off |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **Ridge Regression (Baseline)** | 1.057 | 1.858 | 0.768 | 79.81% | Linear; fails to model threshold interaction triggers. |
-| **Random Forest Regressor** | 0.868 | 1.631 | 0.822 | 84.92% | Strong non-linear modeling; higher memory footprint. |
-| **HistGradientBoosting (Winner)** | **0.827** | **1.554** | **0.838** | **85.59%** | **Highest accuracy, fastest inference, native binning.** |
-
-### Why HistGradientBoosting Was Selected
-1. **Non-Linear Threshold Dynamics**: Mosquito breeding is an all-or-nothing threshold phenomenon. Gradient boosted decision trees model non-linear steps (e.g., rainfall \(> 35\text{ mm}\) ONLY triggers risk if temperature is within \(24^\circ\text{C} - 32^\circ\text{C}\) and waterlogging is high).
-2. **Zero-Inflation Robustness**: Over 58% of the weekly records have 0 cases. Histogram-based gradient boosting splits effectively partition sparse zero-clusters from outbreak surges.
-3. **Execution Efficiency**: HistGradientBoosting pre-bins continuous features into 256 integer bins, reducing split evaluation time by \(10\times\) compared to standard ensembles.
-
----
-
-## 6. Compute & Cost Efficiency Architecture (Step 7 / Criterion 6)
-
-### 6.1 Serialized Model Execution
-- **No In-UI Model Training**: The Streamlit user interface is strictly dedicated to inference. Training routines run offline in `src/train_model.py`.
-- **Pre-Compiled Joblib Artifact**: The production model is serialized to `models/dengue_outbreak_model.joblib` (containing the fitted estimator, feature column schemas, and quantile thresholds).
-- **Inference Latency**: Single-ward scenario predictions execute in **\(< 8\text{ ms}\)** on standard commodity CPUs without requiring GPU acceleration.
-
-### 6.2 In-Memory Caching Architecture
-- `@st.cache_resource`: The model artifact is loaded into RAM as a persistent singleton object. Disk reads occur exactly once on application startup.
-- `@st.cache_data`: Preprocessed feature tables with multi-week lags are cached using PyArrow-backed in-memory tables. User interaction with ward selectors and sliders triggers instant sub-second UI updates without recomputing rolling sums.
-
-### 6.3 External API Minimization & Zero-Cost Infrastructure
-- **100% Self-Contained**: The system operates entirely offline on local compute. No recurring API fees to third-party proprietary weather or map services are incurred.
-- **Municipal Public Health Budget Suitability**: The system can be deployed on standard municipal desktop PCs or budget cloud virtual machines (\$5/month VPS or free-tier Streamlit Cloud) without unexpected bill spikes.
-
-### 6.4 Token & Cost Controls for Future LLM Advisory Extensions
-When expanding the system to auto-generate natural-language health advisories using Large Language Models (LLMs):
-1. **Structured Context Injection**: Weather features and risk scores are pre-aggregated into a minimal JSON payload (\(< 150\) tokens) rather than raw prompt dumping.
-2. **24-Hour Semantic Output Caching**: Ward advisory narratives are cached via hash keys (`hash(ward_id, week_date, risk_tier)`) for 24 hours. Identical ward conditions trigger zero redundant LLM API calls.
-3. **Strict Output Token Caps**: LLM generation parameters are hard-capped to `max_tokens=200`, preventing runaway generation costs.
-4. **Rule-Based Fallback Engine**: For routine "Low Risk" and "Medium Risk" wards, pre-compiled deterministic templates are used directly, reserving LLM generation exclusively for "Critical" epidemic clusters.
+📂 Raw CSV
+(google_sheet_dengue_dataset.csv)
+   │
+   ▼
+🧹 src/data_processing.py
+   ├── Column standardization (lowercase, strip)
+   ├── Date parsing → pd.Timestamp
+   ├── Chronological sort: [ward_id, date]
+   ├── Duplicate removal
+   ├── Type casting (numeric coerce)
+   └── Non-negativity clipping (dengue_cases ≥ 0, rainfall_mm ≥ 0)
+   │
+   ▼
+⚙️ src/feature_engineering.py
+   ├── Multi-week rainfall lags [1w, 2w, 3w, 4w] per ward_id
+   │   └── groupby('ward_id').shift(n) — NO data leakage
+   ├── Rolling statistics (2w/4w mean+sum) with shift(1) guard
+   ├── Temperature lags [1w, 2w, 3w] per ward
+   ├── Humidity lags [1w, 2w, 3w] per ward
+   ├── Interaction features (rain × waterlog, rain × unsanitary)
+   ├── Composite vulnerability index
+   ├── Vector climate suitability (Gaussian + logistic)
+   ├── Calendar features (month, week, monsoon flag, cyclical sin/cos)
+   └── Drop 4-row burn-in per ward (NaN from 4-week lag)
+   │
+   ▼
+🤖 src/train_model.py
+   ├── Chronological split (strict, no shuffle)
+   │   ├── Train: 2016-01-01 → 2023-12-31
+   │   └── Test:  2024-01-01 → 2025-12-29
+   ├── 3 models compared: Ridge, RandomForest, HistGradientBoosting
+   ├── Evaluation: MAE, RMSE, R², Tier Accuracy
+   ├── Winner selection: HistGradientBoosting
+   └── Save: models/dengue_outbreak_model.joblib
+   │
+   ▼
+🎯 src/prediction.py
+   ├── Load model once (cached)
+   ├── Predict on feature vectors
+   ├── Clip negative predictions to 0
+   ├── Map to risk tier via dynamic quantile thresholds
+   └── Extract rule-based risk drivers
+   │
+   ▼
+📊 Streamlit Dashboard + FastAPI
+```
 
 ---
 
-*ADES BIDAI Architectural Blueprint — Validated for 24-Hour Remote Qualifier Phase 1.*
+## 3. Feature Engineering — Epidemiological Rationale
+
+### Why Multi-Week Lags?
+
+The **Aedes aegypti dengue transmission cycle** operates on a 2–4 week time horizon:
+
+| Phase | Duration | Feature |
+|-------|----------|---------|
+| Egg hatching → larvae → pupae | 7–14 days | `rainfall_lag_2w` |
+| Adult emergence + blood meal | 2–3 days | `rainfall_lag_2w` |
+| Extrinsic incubation (virus in mosquito) | 8–12 days | `rainfall_lag_3w` |
+| Human infection → symptom onset | 4–7 days | `rainfall_lag_4w` |
+| **Total lag from rainfall to cases** | **~3–4 weeks** | `rainfall_roll_sum_4w` |
+
+### Feature Importance Categories
+
+```
+Category               Features                            Role
+─────────────────────────────────────────────────────────────────
+Rainfall Lags          rainfall_lag_1w to _4w             Core predictor
+Rolling Stats          roll_mean_2w, roll_sum_4w           Breeding saturation
+Temperature Lags       avg_temp_lag_1w to _3w             Climate suitability
+Humidity Lags          humidity_lag_1w to _3w             Mosquito survival
+Interactions           rain×waterlog, rain×unsanitary     Amplification risk
+Static Ward            density, waterlog, sanitation       Structural risk
+Calendar               is_monsoon, sin/cos_week            Seasonality
+Derived                vector_climate_suitability         Ecological index
+```
+
+---
+
+## 4. ML Model Selection
+
+### Chronological Split Rationale
+
+**Why NOT random split?**
+
+Random splits on time-series data cause **data leakage**:
+- Future observations end up in the training set
+- Model learns future patterns, inflating test accuracy
+- Performance estimates become meaningless
+
+**Chronological split ensures:**
+- Model only learns from the past
+- Test set represents a realistic "future" deployment scenario
+- Results are honest and deployable
+
+```
+Timeline:
+2016      2017      2018  ...  2023      2024      2025
+  │─────────────────────────────│──────────────────│
+  │          TRAIN (80%)        │   TEST (20%)      │
+  │       416 wks × 60 wards    │  104 wks × 60 wards │
+  │        24,960 samples       │   6,240 samples  │
+```
+
+### Model Comparison
+
+| Model | MAE ↓ | RMSE ↓ | R² ↑ | Tier Acc ↑ | Selected |
+|-------|--------|---------|------|-----------|---------|
+| Ridge Baseline | 1.057 | 1.858 | 0.768 | 79.81% | ❌ |
+| RandomForest | 0.868 | 1.631 | 0.822 | 84.92% | ❌ |
+| **HistGradientBoosting** | **0.827** | **1.554** | **0.838** | **85.59%** | ✅ |
+
+### Why HistGradientBoosting?
+
+1. **Best metrics** across MAE, RMSE, R², and Tier Accuracy
+2. **Native missing value handling** — no imputation needed for lag burn-in
+3. **Built-in regularization** — reduces overfitting on small ward subsets
+4. **Fast training** — histogram-based gradient boosting is memory efficient
+5. **Scikit-learn native** — zero additional dependencies
+
+---
+
+## 5. Risk Tier Classification
+
+### Dynamic Quantile Thresholds
+
+Thresholds are computed from the **training set distribution** to handle the high proportion of zero cases:
+
+```python
+q_low  = training_data.quantile(0.50)  # ~1.5 cases
+q_med  = training_data.quantile(0.75)  # ~4.0 cases
+q_high = training_data.quantile(0.90)  # ~10.0 cases
+```
+
+| Tier | Threshold | Epidemiological Meaning |
+|------|-----------|------------------------|
+| Low | < 1.5 cases/week | Sporadic baseline — standard monitoring |
+| Medium | 1.5 – 4.0 | Emerging vector activity — alert mode |
+| High | 4.0 – 10.0 | Active local outbreak — containment |
+| Critical | ≥ 10.0 | Epidemic surge — emergency response |
+
+---
+
+## 6. Confidence Intervals
+
+**Methodology:** ±1.5 × MAE (documented approximation)
+
+```
+CI_lower = max(0, predicted_cases − 1.5 × MAE)
+CI_upper = predicted_cases + 1.5 × MAE
+```
+
+**Rationale:** With MAE = 0.827 and approximately normal residuals, multiplying by 1.5 approximates an 80–90% coverage interval. This is an engineering approximation, NOT a formal bootstrap CI. Disclosed as such in the UI.
+
+---
+
+## 7. Backend Architecture (FastAPI)
+
+```
+api.py startup:
+1. Load CSV → clean → feature_engineer (cached as global DataFrames)
+2. Load model artifact (cached)
+3. Run predictions on latest week per ward (cached)
+4. Ready to serve requests
+
+Request handling (all in-memory, no disk I/O on each request):
+GET /api/predict → lookup precomputed or run model.predict() 
+GET /api/ward/{id} → filter global DataFrame, serialize
+GET /api/environmental → compute correlations from global df
+```
+
+---
+
+## 8. Cost Efficiency
+
+| Factor | Implementation | Cost |
+|--------|---------------|------|
+| Inference | Pre-loaded joblib model, <10ms | $0 |
+| Training | Local CPU, ~30 seconds | $0 |
+| External APIs | None | $0 |
+| LLMs | None | $0 |
+| Cloud | None — fully local | $0 |
+| Caching | @st.cache_data + @st.cache_resource | $0 |
+| **Total** | | **$0** |
+
+---
+
+## 9. Frontend Architecture (Streamlit Multi-Page)
+
+```
+app.py (Main Dashboard)
+   └── pages/
+       ├── 01_Risk_Map.py         → /api/wards
+       ├── 02_Outbreak_Prediction.py → /api/predict, /api/ward/{id}
+       ├── 03_Weather_Monitoring.py  → /api/weather/{ward_id}
+       ├── 04_Ward_Comparison.py     → /api/comparison
+       ├── 05_Model_Performance.py   → /api/metrics
+       ├── 06_Environmental_Analysis.py → /api/environmental
+       ├── 07_Prevention_Awareness.py   → /api/wards (risk filter)
+       └── 08_About_Project.py          → static + /api/metrics
+```
+
+Streamlit multi-page apps use the `pages/` directory convention — each file becomes a sidebar navigation entry automatically.
+
+---
+
+## 10. Reproducibility
+
+A fresh setup requires:
+```
+1. git clone + pip install -r requirements.txt
+2. Place dataset in data/
+3. python src/train_model.py   (or use pre-saved model)
+4. python api.py               (terminal 1)
+5. python -m streamlit run app.py  (terminal 2)
+```
+
+Deterministic training ensured via `random_state=42` on all models.

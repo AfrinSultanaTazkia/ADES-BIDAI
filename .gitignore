@@ -75,6 +75,7 @@ Thumbs.db
 *.pb
 
 # Temporary & Cache Files (keeping data/ directory intact)
+_pages_backup/
 *.log
 *.tmp
 *.temp

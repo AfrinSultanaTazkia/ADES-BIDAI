@@ -5,3 +5,11 @@ gatherUsageStats = false
 headless = true
 port = 8501
 enableCORS = false
+
+[theme]
+base = "dark"
+primaryColor = "#06B6D4"
+backgroundColor = "#0B1120"
+secondaryBackgroundColor = "#111827"
+textColor = "#F9FAFB"
+font = "sans serif"
