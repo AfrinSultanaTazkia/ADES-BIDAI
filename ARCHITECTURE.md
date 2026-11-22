@@ -274,7 +274,7 @@ To capture these amplification dynamics, the pipeline in `src/feature_engineerin
 ##### 2. Unsanitary Breeding Site Interactions
 Uncollected domestic solid waste—such as discarded plastic containers, tires, abandoned buckets, and coconut shells—serves as the primary artificial breeding container for *Aedes aegypti*. The pipeline defines an unsanitary factor:
 
-$$\text{unsanitary\_factor} = \max(0.0, 1.0 - \text{sanitation\_score})$$
+$$\text{Unsanitary Factor} = \max(0.0, 1.0 - \text{Sanitation Score})$$
 
 where a lower municipal sanitation score yields a higher unsanitary factor.
 
@@ -284,7 +284,7 @@ where a lower municipal sanitation score yields a higher unsanitary factor.
 ##### 3. Composite Vulnerability Index
 To establish a normalized, weather-independent structural baseline for every ward, the pipeline combines drainage vulnerability and sanitation deficits into an equal-weight composite index:
 
-$$\text{Composite Vulnerability Index} = 0.5 \times \text{water\_logging\_risk\_index} + 0.5 \times (1.0 - \text{sanitation\_score})$$
+$$\text{Composite Vulnerability Index} = 0.5 \times \text{Water Logging Risk Index} + 0.5 \times (1.0 - \text{Sanitation Score})$$
 
 This score scales from 0.0 (optimal drainage and sanitation) to 1.0 (severe drainage failure and unmanaged solid waste), providing a stable index of baseline neighborhood susceptibility.
 
@@ -293,7 +293,7 @@ This score scales from 0.0 (optimal drainage and sanitation) to 1.0 (severe drai
 
 To model this contact acceleration, the pipeline computes the density exposure factor:
 
-$$\text{Density Exposure Factor} = \left(\frac{\text{population\_density\_sqkm}}{50,000}\right) \times \text{Composite Vulnerability Index}$$
+$$\text{Density Exposure Factor} = \left(\frac{\text{Population Density}}{50{,}000}\right) \times \text{Composite Vulnerability Index}$$
 
 By scaling composite infrastructural vulnerability with normalized population crowding (benchmarked against 50,000 residents per square kilometer), this feature models how extreme residential congestion accelerates the transmission cycle from mosquitoes to humans.
 
@@ -310,9 +310,12 @@ By scaling composite infrastructural vulnerability with normalized population cr
 
 #### Category 5: Vector Climate Suitability Index
 To model physiological thresholds, the system computes a composite ecological suitability metric:
-$$\text{Temp Suitability} = \exp\left(-0.5 \times \left(\frac{\text{avg\_temp\_c} - 28.5}{4.0}\right)^2\right)$$
-$$\text{Humidity Suitability} = \frac{1}{1 + \exp(-0.15 \times (\text{relative\_humidity\_pct} - 65.0))}$$
-$$\text{Vector Climate Suitability} = \text{Temp Suitability} \times \text{Humidity Suitability}$$
+
+$$\text{Temperature Suitability} = \exp\left(-0.5 \times \left(\frac{\text{Average Temperature} - 28.5}{4.0}\right)^2\right)$$
+
+$$\text{Humidity Suitability} = \frac{1}{1 + \exp(-0.15 \times (\text{Relative Humidity} - 65.0))}$$
+
+$$\text{Vector Climate Suitability} = \text{Temperature Suitability} \times \text{Humidity Suitability}$$
 
 The Gaussian temperature function peaks at $28.5^\circ\text{C}$ (the optimal temperature for *Aedes aegypti* reproduction and dengue virus transmission), while the logistic humidity function increases smoothly as relative humidity rises above $65\%$.
 
