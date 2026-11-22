@@ -370,7 +370,7 @@ st.markdown("""<div class="hero-header">
 <span class="hero-title-bn">এডিস বিদায় | </span>
 <span class="hero-title-en">ADES BIDAI</span>
 </div>
-<div class="hero-tagline">“মশার খবর রাখি, ডেঙ্গুকে বিদায় জানাই!”</div>
+<div class="hero-tagline">মশার খবর আগে,<br>সুরক্ষা থাকবে সাথে!</div>
 <div style="margin-top: 10px;">
 <span style="display: inline-flex; align-items: center; gap: 8px; background: #1F2937; padding: 5px 14px; border-radius: 20px; font-size: 12px; color: #F9FAFB; border: 1px solid #374151;">
 <span style="width: 8px; height: 8px; background: #10B981; border-radius: 50%; box-shadow: 0 0 8px #10B981;"></span>
@@ -393,13 +393,13 @@ with col_tab1:
     c_cls1 = "tab-card-active" if is_t1 else "tab-card-inactive"
     st.markdown(f"""
     <div class="{c_cls1}">
-        <div class="tab-title-main">📡 লাইভ ওয়ার্ড পূর্বাভাস</div>
+        <div class="tab-title-main">লাইভ ওয়ার্ড পূর্বাভাস</div>
         <div class="tab-subtitle-en">Live Ward Forecast & Spatial Risk</div>
         <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12);">
-            <b>🎯 উদ্দেশ্য:</b> নির্বাচিত ওয়ার্ডের আগামী ২–৪ সপ্তাহের ডেঙ্গু ঝুঁকি ও সম্ভাব্য আক্রান্তের সংখ্যা নির্ণয় করা।<br>
-            <b>⚙️ যেভাবে কাজ করে:</b> বৃষ্টিপাতের ৩ সপ্তাহের ল্যাগ, তাপমাত্রা, আর্দ্রতা ও ড্রেনেজ ডেটা দিয়ে মেশিন লার্নিং মডেল রিয়েল-টাইম প্রেডিকশন এবং ৯৫% কনফিডেন্স ইন্টারভ্যাল হিসাব করে।<br>
-            <b>🛠️ ব্যবহৃত টুলস:</b> Scikit-Learn, Pydeck (WebGL), Plotly, Joblib Serialized Inference Engine।<br>
-            <b>💡 উপকারিতা:</b> ঝুঁকিপূর্ণ ওয়ার্ডে আগেভাগে ফগিং ও লার্ভিসাইড স্প্রে টিম পাঠানোর সিদ্ধান্ত নিতে সাহায্য করে।
+            <b>উদ্দেশ্য:</b> নির্বাচিত ওয়ার্ডের আগামী ২–৪ সপ্তাহের ডেঙ্গু ঝুঁকি ও সম্ভাব্য আক্রান্তের সংখ্যা নির্ণয় করা।<br>
+            <b>যেভাবে কাজ করে:</b> বৃষ্টিপাতের ৩ সপ্তাহের ল্যাগ, তাপমাত্রা, আর্দ্রতা ও ড্রেনেজ ডেটা দিয়ে মেশিন লার্নিং মডেল রিয়েল-টাইম প্রেডিকশন এবং ৯৫% কনফিডেন্স ইন্টারভ্যাল হিসাব করে।<br>
+            <b>ব্যবহৃত টুলস:</b> Scikit-Learn, Pydeck (WebGL), Plotly, Joblib Serialized Inference Engine।<br>
+            <b>উপকারিতা:</b> ঝুঁকিপূর্ণ ওয়ার্ডে আগেভাগে ফগিং ও লার্ভিসাইড স্প্রে টিম পাঠানোর সিদ্ধান্ত নিতে সাহায্য করে।
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -412,13 +412,13 @@ with col_tab2:
     c_cls2 = "tab-card-active" if is_t2 else "tab-card-inactive"
     st.markdown(f"""
     <div class="{c_cls2}">
-        <div class="tab-title-main">🌧️ আবহাওয়া ও ল্যাগ বিশ্লেষণ</div>
+        <div class="tab-title-main">আবহাওয়া ও ল্যাগ বিশ্লেষণ</div>
         <div class="tab-subtitle-en">Multi-Week Lag Analysis & Vector Biology</div>
         <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12);">
-            <b>🎯 উদ্দেশ্য:</b> বৃষ্টিপাত ও আবহাওয়ার সাথে ডেঙ্গুর ২–৪ সপ্তাহের সময়ের পার্থক্যের কারণ বিশ্লেষণ করা।<br>
-            <b>⚙️ যেভাবে কাজ করে:</b> অতীত ১, ২, ৩ ও ৪ সপ্তাহের বৃষ্টিপাতের প্রভাব হিসেব করা হয়। কারণ ডিম থেকে পূর্ণাঙ্গ মশা হতে ও ভাইরাস ছড়াতে ঠিক ২–৪ সপ্তাহ সময় লাগে।<br>
-            <b>🛠️ ব্যবহৃত টুলস:</b> Pandas GroupBy Shift (1–4 Weeks), Rolling 4W Accumulators, Pearson Correlation (r=0.76)।<br>
-            <b>💡 উপকারিতা:</b> বৃষ্টি শুরু হওয়ার ২–৩ সপ্তাহ আগেই আগাম সতর্কবার্তা দিয়ে মহামারী ঠেকানো সম্ভব হয়।
+            <b>উদ্দেশ্য:</b> বৃষ্টিপাত ও আবহাওয়ার সাথে ডেঙ্গুর ২–৪ সপ্তাহের সময়ের পার্থক্যের কারণ বিশ্লেষণ করা।<br>
+            <b>যেভাবে কাজ করে:</b> অতীত ১, ২, ৩ ও ৪ সপ্তাহের বৃষ্টিপাতের প্রভাব হিসেব করা হয়। কারণ ডিম থেকে পূর্ণাঙ্গ মশা হতে ও ভাইরাস ছড়াতে ঠিক ২–৪ সপ্তাহ সময় লাগে।<br>
+            <b>ব্যবহৃত টুলস:</b> Pandas GroupBy Shift (1–4 Weeks), Rolling 4W Accumulators, Pearson Correlation (r=0.76)।<br>
+            <b>উপকারিতা:</b> বৃষ্টি শুরু হওয়ার ২–৩ সপ্তাহ আগেই আগাম সতর্কবার্তা দিয়ে মহামারী ঠেকানো সম্ভব হয়।
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -431,13 +431,13 @@ with col_tab3:
     c_cls3 = "tab-card-active" if is_t3 else "tab-card-inactive"
     st.markdown(f"""
     <div class="{c_cls3}">
-        <div class="tab-title-main">🏆 মডেল ভ্যালিডেশন মেট্রিক্স</div>
+        <div class="tab-title-main">মডেল ভ্যালিডেশন মেট্রিক্স</div>
         <div class="tab-subtitle-en">Model Validation (MAE / RMSE) & Accuracy</div>
         <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12);">
-            <b>🎯 উদ্দেশ্য:</b> মেশিন লার্নিং মডেলের আসল নির্ভুলতা এবং ক্রোনোলজিক্যাল পারফরম্যান্স প্রমাণ করা।<br>
-            <b>⚙️ যেভাবে কাজ করে:</b> ২০১৬–২০২৩ সালের ডেটা দিয়ে ট্রেইন করে সম্পূর্ণ ভবিষ্যৎ ২০২৪–২০২৫ সালের ৬,২৪০টি টেস্ট ডেটায় মডেল যাচাই করা হয়েছে (নো ডেটা লিকেজ)।<br>
-            <b>🛠️ ব্যবহৃত টুলস:</b> HistGradientBoosting vs RandomForest vs Ridge Baseline, 100% Offline Local Pipeline।<br>
-            <b>💡 ফলাফল:</b> MAE: ০.৮২৭ কেস, RMSE: ১.৫৫৪, R²: ০.৮৩৮ এবং ৮৫.৫৯% রিস্ক টায়ার অ্যাকুরেসি।
+            <b>উদ্দেশ্য:</b> মেশিন লার্নিং মডেলের আসল নির্ভুলতা এবং ক্রোনোলজিক্যাল পারফরম্যান্স প্রমাণ করা।<br>
+            <b>যেভাবে কাজ করে:</b> ২০১৬–২০২৩ সালের ডেটা দিয়ে ট্রেইন করে সম্পূর্ণ ভবিষ্যৎ ২০২৪–২০২৫ সালের ৬,২৪০টি টেস্ট ডেটায় মডেল যাচাই করা হয়েছে (নো ডেটা লিকেজ)।<br>
+            <b>ব্যবহৃত টুলস:</b> HistGradientBoosting vs RandomForest vs Ridge Baseline, 100% Offline Local Pipeline।<br>
+            <b>ফলাফল:</b> MAE: ০.৮২৭ কেস, RMSE: ১.৫৫৪, R²: ০.৮৩৮ এবং ৮৫.৫৯% রিস্ক টায়ার অ্যাকুরেসি।
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -822,7 +822,7 @@ with col_main:
         st.markdown(f"""
         <div style="background: #111827; border: 1px solid #1F2937; border-radius: 10px; padding: 14px 18px; margin-top: 12px;">
             <div style="font-size: 13.5px; font-weight: 800; color: #06B6D4; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
-                <span>💡 সাধারণ ভাষায় ব্যাখ্যা:</span>
+                <span>সাধারণ ভাষায় ব্যাখ্যা:</span>
                 <span style="color: #F9FAFB;">এই প্রেডিকশন কীভাবে তৈরি হলো? (Human-Friendly Summary)</span>
             </div>
             <div style="font-size: 12.5px; color: #94A3B8; line-height: 1.6;">
@@ -910,7 +910,7 @@ with col_main:
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                 <div>
                     <div class="card-heading" style="font-size: 16px !important; margin-bottom: 2px;">
-                        🏆 মেশিন লার্নিং মডেল ভ্যালিডেশন ও অ্যাকুরেসি বেঞ্চমার্ক (Model Performance Benchmark)
+                        মেশিন লার্নিং মডেল ভ্যালিডেশন ও অ্যাকুরেসি বেঞ্চমার্ক (Model Performance Benchmark)
                     </div>
                     <div style="font-size: 13px; color: #94A3B8;">
                         কেন আমাদের মডেল হ্যাকাথনে এবং বাস্তবে সবচেয়ে নির্ভুল ও নির্ভরযোগ্য? (Strict Chronological Out-of-Sample Test)
@@ -921,7 +921,7 @@ with col_main:
                 </div>
             </div>
             <div style="font-size: 12.5px; color: #CBD5E1; line-height: 1.6; margin-bottom: 14px; background: #1F2937; padding: 10px 14px; border-radius: 8px; border-left: 3px solid #06B6D4;">
-                💡 <b>সহজ ভাষায় বুঝুন:</b> কোনো ডেটা লিকেজ ছাড়াই আমরা ২০১৬–২০২৩ সালের ডেটা দিয়ে মডেল ট্রেইন করেছি এবং সম্পূর্ণ ভবিষ্যৎ <b>২০২৪–২০২৫ সালের ৬,২৪০টি অজানা সাপ্তাহিক ডেটায়</b> টেস্ট করে প্রমাণ করেছি যে আমাদের মডেল সবচেয়ে নিখুঁত ফলাফল দেয়।
+                <b>সহজ ভাষায় বুঝুন:</b> কোনো ডেটা লিকেজ ছাড়াই আমরা ২০১৬–২০২৩ সালের ডেটা দিয়ে মডেল ট্রেইন করেছি এবং সম্পূর্ণ ভবিষ্যৎ <b>২০২৪–২০২৫ সালের ৬,২৪০টি অজানা সাপ্তাহিক ডেটায়</b> টেস্ট করে প্রমাণ করেছি যে আমাদের মডেল সবচেয়ে নিখুঁত ফলাফল দেয়।
             </div>
         """, unsafe_allow_html=True)
         
@@ -985,43 +985,48 @@ with col_main:
             """, unsafe_allow_html=True)
             
         # 4 Core Strengths in Human Language (Easy Bangla + English Guide)
-        st.markdown("""
-        <div style="margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-            <div style="background: #1F2937; padding: 14px 16px; border-radius: 8px; border-left: 3px solid #10B981;">
+        st.markdown("<div style='margin-top: 18px;'></div>", unsafe_allow_html=True)
+        cs_col1, cs_col2 = st.columns(2)
+        with cs_col1:
+            st.markdown("""
+            <div style="background: #1F2937; padding: 14px 16px; border-radius: 8px; border-left: 3px solid #10B981; margin-bottom: 12px;">
                 <div style="font-size: 13.5px; font-weight: 800; color: #10B981; margin-bottom: 4px;">
-                    🛡️ ১. জিরো ডেটা লিকেজ (Zero Data Leakage Guarantee)
+                    ১. জিরো ডেটা লিকেজ (Zero Data Leakage Guarantee)
                 </div>
                 <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6;">
                     সাধারণ বা ভুল ডেটা সায়েন্সে র্যান্ডম স্প্লিট (Random Train-Test Split) করে ভবিষ্যতের ডেটা দিয়ে অতীত প্রেডিক্ট করে ভুয়া বেশি অ্যাকুরেসি দেখায়। কিন্তু আমরা বাস্তব জীবনের মতো কঠোরভাবে <b>২০১৬–২০২৩ সালের অতীত দিয়ে মডেল ট্রেইন করেছি</b> এবং <b>২০২৪–২০২৫ সালের ভবিষ্যৎ ডেটায় টেস্ট করেছি</b>।
                 </div>
             </div>
-            
-            <div style="background: #1F2937; padding: 14px 16px; border-radius: 8px; border-left: 3px solid #06B6D4;">
-                <div style="font-size: 13.5px; font-weight: 800; color: #06B6D4; margin-bottom: 4px;">
-                    🎯 ২. MAE ০.৮২৭ মানে বাস্তবে কী? (Real-World Meaning of MAE 0.83)
-                </div>
-                <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6;">
-                    MAE (Mean Absolute Error) মানে হলো গড় ভুলের পরিমাণ। কোনো একটি নির্দিষ্ট ওয়ার্ডে যদি বাস্তবে ২০ জন ডেঙ্গু রোগী থাকে, আমাদের মডেল সেখানে ১৯ বা ২১ জন প্রেডিক্ট করে। অর্থাৎ <b>ভুলের পরিমাণ গড়ে ১ জন রোগীরও কম</b>, যা জনস্বাস্থ্য পরিকল্পনার জন্য অত্যন্ত নির্ভরযোগ্য!
-                </div>
-            </div>
-            
+            """, unsafe_allow_html=True)
+            st.markdown("""
             <div style="background: #1F2937; padding: 14px 16px; border-radius: 8px; border-left: 3px solid #F59E0B;">
                 <div style="font-size: 13.5px; font-weight: 800; color: #F59E0B; margin-bottom: 4px;">
-                    🧬 ৩. বায়োলজিক্যাল নন-লিনিয়ার থ্রেশহোল্ড (Biological Vector Thresholds)
+                    ৩. বায়োলজিক্যাল নন-লিনিয়ার থ্রেশহোল্ড (Biological Vector Thresholds)
                 </div>
                 <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6;">
                     মশার বংশবৃদ্ধি সাধারণ সরলরেখায় ঘটে না। তাপমাত্রা ২৪°C আর বৃষ্টিপাত ৫০ মিমি ছাড়িয়ে গেলেই মশার ডিম একযোগে ফুটে ওঠে এবং হঠাৎ রোগী বেড়ে যায়। HistGradientBoosting অ্যালগরিদম ডিসিশন ট্রি-র মাধ্যমে এই বায়োলজিক্যাল থ্রেশহোল্ড নির্ভুলভাবে শনাক্ত করতে পারে।
                 </div>
             </div>
-            
+            """, unsafe_allow_html=True)
+        with cs_col2:
+            st.markdown("""
+            <div style="background: #1F2937; padding: 14px 16px; border-radius: 8px; border-left: 3px solid #06B6D4; margin-bottom: 12px;">
+                <div style="font-size: 13.5px; font-weight: 800; color: #06B6D4; margin-bottom: 4px;">
+                    ২. MAE ০.৮২৭ মানে বাস্তবে কী? (Real-World Meaning of MAE 0.83)
+                </div>
+                <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6;">
+                    MAE (Mean Absolute Error) মানে হলো গড় ভুলের পরিমাণ। কোনো একটি নির্দিষ্ট ওয়ার্ডে যদি বাস্তবে ২০ জন ডেঙ্গু রোগী থাকে, আমাদের মডেল সেখানে ১৯ বা ২১ জন প্রেডিক্ট করে। অর্থাৎ <b>ভুলের পরিমাণ গড়ে ১ জন রোগীরও কম</b>, যা জনস্বাস্থ্য পরিকল্পনার জন্য অত্যন্ত নির্ভরযোগ্য!
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("""
             <div style="background: #1F2937; padding: 14px 16px; border-radius: 8px; border-left: 3px solid #EC4899;">
                 <div style="font-size: 13.5px; font-weight: 800; color: #EC4899; margin-bottom: 4px;">
-                    ⚡ ৪. ০ টাকা ক্লাউড খরচ ও সম্পূর্ণ অফলাইন (Zero Cloud API Cost)
+                    ৪. ০ টাকা ক্লাউড খরচ ও সম্পূর্ণ অফলাইন (Zero Cloud API Cost)
                 </div>
                 <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6;">
                     কোনো পেইড ওপেনএআই বা এক্সটার্নাল ক্লাউড এপিআই ছাড়াই সিরিয়ালাইজড মডেল (<code>joblib</code>) ব্যবহার করা হয়েছে। ফলে এটি সম্পূর্ণ ফ্রি, ইন্টারনেট স্পিড কম হলেও নিরবচ্ছিন্ন এবং <b>মাত্র ১৫ মিলিসেকেন্ডে লোকাল কম্পিউটিংয়ে প্রেডিকশন দেয়</b>।
                 </div>
             </div>
-        </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
