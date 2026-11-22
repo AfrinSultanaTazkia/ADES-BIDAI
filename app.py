@@ -394,8 +394,13 @@ with col_tab1:
     st.markdown(f"""
     <div class="{c_cls1}">
         <div class="tab-title-main">📡 লাইভ ওয়ার্ড পূর্বাভাস</div>
-        <div class="tab-subtitle-en">Live Ward Forecast</div>
-        <div class="tab-note">সিলেক্টেড ওয়ার্ডের ঝুঁকি হিটম্যাপ, কেস প্রেডিকশন এবং ভেক্টর চালক বিশ্লেষণ</div>
+        <div class="tab-subtitle-en">Live Ward Forecast & Spatial Risk</div>
+        <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12);">
+            <b>🎯 উদ্দেশ্য:</b> নির্বাচিত ওয়ার্ডের আগামী ২–৪ সপ্তাহের ডেঙ্গু ঝুঁকি ও সম্ভাব্য আক্রান্তের সংখ্যা নির্ণয় করা।<br>
+            <b>⚙️ যেভাবে কাজ করে:</b> বৃষ্টিপাতের ৩ সপ্তাহের ল্যাগ, তাপমাত্রা, আর্দ্রতা ও ড্রেনেজ ডেটা দিয়ে মেশিন লার্নিং মডেল রিয়েল-টাইম প্রেডিকশন এবং ৯৫% কনফিডেন্স ইন্টারভ্যাল হিসাব করে।<br>
+            <b>🛠️ ব্যবহৃত টুলস:</b> Scikit-Learn, Pydeck (WebGL), Plotly, Joblib Serialized Inference Engine।<br>
+            <b>💡 উপকারিতা:</b> ঝুঁকিপূর্ণ ওয়ার্ডে আগেভাগে ফগিং ও লার্ভিসাইড স্প্রে টিম পাঠানোর সিদ্ধান্ত নিতে সাহায্য করে।
+        </div>
     </div>
     """, unsafe_allow_html=True)
     if st.button("ট্যাব দেখুন (Open Forecast)", key="btn_switch_tab1", use_container_width=True):
@@ -408,8 +413,13 @@ with col_tab2:
     st.markdown(f"""
     <div class="{c_cls2}">
         <div class="tab-title-main">🌧️ আবহাওয়া ও ল্যাগ বিশ্লেষণ</div>
-        <div class="tab-subtitle-en">Multi-Week Lag Analysis</div>
-        <div class="tab-note">২–৪ সপ্তাহের বৃষ্টিপাত ল্যাগ, আর্দ্রতা ও মশার ডিম ফোটার বায়োলজিক্যাল সাইকেল</div>
+        <div class="tab-subtitle-en">Multi-Week Lag Analysis & Vector Biology</div>
+        <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12);">
+            <b>🎯 উদ্দেশ্য:</b> বৃষ্টিপাত ও আবহাওয়ার সাথে ডেঙ্গুর ২–৪ সপ্তাহের সময়ের পার্থক্যের কারণ বিশ্লেষণ করা।<br>
+            <b>⚙️ যেভাবে কাজ করে:</b> অতীত ১, ২, ৩ ও ৪ সপ্তাহের বৃষ্টিপাতের প্রভাব হিসেব করা হয়। কারণ ডিম থেকে পূর্ণাঙ্গ মশা হতে ও ভাইরাস ছড়াতে ঠিক ২–৪ সপ্তাহ সময় লাগে।<br>
+            <b>🛠️ ব্যবহৃত টুলস:</b> Pandas GroupBy Shift (1–4 Weeks), Rolling 4W Accumulators, Pearson Correlation (r=0.76)।<br>
+            <b>💡 উপকারিতা:</b> বৃষ্টি শুরু হওয়ার ২–৩ সপ্তাহ আগেই আগাম সতর্কবার্তা দিয়ে মহামারী ঠেকানো সম্ভব হয়।
+        </div>
     </div>
     """, unsafe_allow_html=True)
     if st.button("ট্যাব দেখুন (Open Lag Analysis)", key="btn_switch_tab2", use_container_width=True):
@@ -422,8 +432,13 @@ with col_tab3:
     st.markdown(f"""
     <div class="{c_cls3}">
         <div class="tab-title-main">🏆 মডেল ভ্যালিডেশন মেট্রিক্স</div>
-        <div class="tab-subtitle-en">Model Validation (MAE / RMSE)</div>
-        <div class="tab-note">ক্রোনোলজিক্যাল টেস্ট স্প্লিট ও মেশিন লার্নিং মডেলের আসল অ্যাকুরেসি ও স্কোর</div>
+        <div class="tab-subtitle-en">Model Validation (MAE / RMSE) & Accuracy</div>
+        <div style="font-size: 12px; color: #CBD5E1; line-height: 1.6; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12);">
+            <b>🎯 উদ্দেশ্য:</b> মেশিন লার্নিং মডেলের আসল নির্ভুলতা এবং ক্রোনোলজিক্যাল পারফরম্যান্স প্রমাণ করা।<br>
+            <b>⚙️ যেভাবে কাজ করে:</b> ২০১৬–২০২৩ সালের ডেটা দিয়ে ট্রেইন করে সম্পূর্ণ ভবিষ্যৎ ২০২৪–২০২৫ সালের ৬,২৪০টি টেস্ট ডেটায় মডেল যাচাই করা হয়েছে (নো ডেটা লিকেজ)।<br>
+            <b>🛠️ ব্যবহৃত টুলস:</b> HistGradientBoosting vs RandomForest vs Ridge Baseline, 100% Offline Local Pipeline।<br>
+            <b>💡 ফলাফল:</b> MAE: ০.৮২৭ কেস, RMSE: ১.৫৫৪, R²: ০.৮৩৮ এবং ৮৫.৫৯% রিস্ক টায়ার অ্যাকুরেসি।
+        </div>
     </div>
     """, unsafe_allow_html=True)
     if st.button("ট্যাব দেখুন (Open Validation)", key="btn_switch_tab3", use_container_width=True):
