@@ -371,12 +371,6 @@ st.markdown("""<div class="hero-header">
 <span class="hero-title-en">ADES BIDAI</span>
 </div>
 <div class="hero-tagline">মশার খবর আগে,<br>সুরক্ষা থাকবে সাথে!</div>
-<div style="margin-top: 10px;">
-<span style="display: inline-flex; align-items: center; gap: 8px; background: #1F2937; padding: 5px 14px; border-radius: 20px; font-size: 12px; color: #F9FAFB; border: 1px solid #374151;">
-<span style="width: 8px; height: 8px; background: #10B981; border-radius: 50%; box-shadow: 0 0 8px #10B981;"></span>
-<span>Dr. S. Rahman • Epidemiologist</span>
-</span>
-</div>
 </div>""", unsafe_allow_html=True)
 
 
