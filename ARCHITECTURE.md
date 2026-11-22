@@ -237,8 +237,8 @@ graph LR
         F1["Multi-Week Rainfall Lags<br/>rainfall_lag_1w, 2w, 3w, 4w"]
         F2["Rolling Rainfall Accumulators<br/>roll_mean_2w, roll_sum_2w, 4w, 3w"]
         F3["Thermal & Humidity Lags<br/>avg_temp_lag_1w-3w, humidity_lag_1w-3w"]
-        F4["Urban Vulnerability Interactions<br/>rain_lag2_x_waterlog, rain_lag2_x_unsanitary"]
-        F5["Composite Biological Indices<br/>vector_climate_suitability, density_exposure"]
+        F4["Urban Vulnerability Interactions<br/>rain_lag2/3w_x_waterlog, rain_lag2/3w_x_unsanitary,<br/>composite_vulnerability, density_exposure"]
+        F5["Composite Biological Indices<br/>vector_climate_suitability, temp_range_c"]
         F6["Calendar & Monsoon Seasonality<br/>is_monsoon, sin_week, cos_week, sin_month, cos_month"]
     end
 ```
@@ -263,14 +263,50 @@ Mosquito metabolic rates, feeding frequency, and viral replication are sensitive
 - Diurnal Temperature Range (`temp_range_c = max_temp_c - min_temp_c`): Represents daily temperature swings; wide swings increase mosquito mortality, whereas narrow ranges favor vector survival.
 
 #### Category 4: Urban Vulnerability Interaction Terms
-Identical rainfall produces very different public health outcomes depending on local neighborhood infrastructure. The pipeline models these non-linear interaction effects:
-- Drainage Bottlenecks: `rain_lag2_x_waterlog = rainfall_lag_2w * water_logging_risk_index`. Rain falling on areas with severe drainage blockages remains stagnant for longer periods, multiplying breeding potential.
-- Unsanitary Environments: `rain_lag2_x_unsanitary = rainfall_lag_2w * (1.0 - sanitation_score)`. Discarded plastic containers and uncollected solid waste collect water and serve as artificial breeding containers.
-- Composite Vulnerability Index:
-  $$\text{Composite Vulnerability} = 0.5 \times \text{water\_logging\_risk\_index} + 0.5 \times (1.0 - \text{sanitation\_score})$$
-- Density Exposure Factor:
-  $$\text{Density Exposure} = \left(\frac{\text{population\_density\_sqkm}}{50,000}\right) \times \text{Composite Vulnerability}$$
-  This interaction captures how densely packed urban populations facilitate rapid human-to-vector-to-human transmission chains.
+Rainfall accumulation alone does not determine the severity of a dengue outbreak. An identical 50 mm rainfall event produces fundamentally different public health outcomes depending on local neighborhood infrastructure. In an affluent, well-paved ward with active subsurface storm drainage and daily waste collection, runoff clears within hours, leaving virtually no standing water for mosquito oviposition. Conversely, in an underserved, high-density ward with unpaved roads, blocked drainage channels, and uncollected solid waste, that same 50 mm of precipitation creates persistent standing pools and fills hundreds of discarded containers, creating ideal breeding habitats.
+
+To capture these amplification dynamics, the pipeline in `src/feature_engineering.py` constructs four specific meteorological-infrastructural interaction terms, a composite vulnerability baseline, and an urban crowding exposure factor:
+
+##### 1. Drainage Bottleneck Interactions
+- `rain_lag2_x_waterlog`: The product of 2-week lagged rainfall and the drainage bottleneck index (`rainfall_lag_2w * water_logging_risk_index`). This captures rainwater trapped in blocked roadside drains and unpaved depressions during the peak larval and pupal development window (Days 7 to 14 post-rainfall).
+- `rain_lag3_x_waterlog`: The product of 3-week lagged rainfall and drainage bottlenecks (`rainfall_lag_3w * water_logging_risk_index`). This term models the prolonged persistence of stagnant surface water that sustains adult mosquito emergence into the active human-biting and viral incubation phase.
+
+##### 2. Unsanitary Breeding Site Interactions
+Uncollected domestic solid waste—such as discarded plastic containers, tires, abandoned buckets, and coconut shells—serves as the primary artificial breeding container for *Aedes aegypti*. The pipeline defines an unsanitary factor:
+
+$$\text{unsanitary\_factor} = \max(0.0, 1.0 - \text{sanitation\_score})$$
+
+where a lower municipal sanitation score yields a higher unsanitary factor.
+
+- `rain_lag2_x_unsanitary`: The product of 2-week lagged rainfall and the unsanitary factor (`rainfall_lag_2w * unsanitary_factor`). This reflects rainwater collecting in discarded artificial containers right as mosquito eggs hatch.
+- `rain_lag3_x_unsanitary`: The product of 3-week lagged rainfall and unsanitary conditions (`rainfall_lag_3w * unsanitary_factor`). This represents the proliferation of adult vector breeding pockets in close proximity to residential homes during peak biting activity.
+
+##### 3. Composite Vulnerability Index
+To establish a normalized, weather-independent structural baseline for every ward, the pipeline combines drainage vulnerability and sanitation deficits into an equal-weight composite index:
+
+$$\text{Composite Vulnerability Index} = 0.5 \times \text{water\_logging\_risk\_index} + 0.5 \times (1.0 - \text{sanitation\_score})$$
+
+This score scales from 0.0 (optimal drainage and sanitation) to 1.0 (severe drainage failure and unmanaged solid waste), providing a stable index of baseline neighborhood susceptibility.
+
+##### 4. Density Exposure Multiplier
+*Aedes aegypti* mosquitoes have an effective flight radius of only 50 to 100 meters throughout their adult lifespan. In sparsely populated areas, female mosquitoes must travel further to find blood meals, increasing vector mortality. In densely populated urban wards, however, an infectious mosquito has immediate and continuous access to multiple human hosts within a single dwelling or alleyway. 
+
+To model this contact acceleration, the pipeline computes the density exposure factor:
+
+$$\text{Density Exposure Factor} = \left(\frac{\text{population\_density\_sqkm}}{50,000}\right) \times \text{Composite Vulnerability Index}$$
+
+By scaling composite infrastructural vulnerability with normalized population crowding (benchmarked against 50,000 residents per square kilometer), this feature models how extreme residential congestion accelerates the transmission cycle from mosquitoes to humans.
+
+##### Summary of Category 4 Engineered Features
+
+| Feature Name | Mathematical Definition | Input Dimensions | Epidemiological Function in Model |
+|---|---|---|---|
+| `rain_lag2_x_waterlog` | `rainfall_lag_2w * water_logging_risk_index` | Continuous ($\ge 0.0$) | Quantifies standing rainwater trapped in clogged drains during larval development. |
+| `rain_lag3_x_waterlog` | `rainfall_lag_3w * water_logging_risk_index` | Continuous ($\ge 0.0$) | Measures prolonged stagnant water sustaining adult vector emergence and viral incubation. |
+| `rain_lag2_x_unsanitary` | `rainfall_lag_2w * (1.0 - sanitation_score)` | Continuous ($\ge 0.0$) | Models rainwater pooling in uncollected solid waste during the egg-hatching window. |
+| `rain_lag3_x_unsanitary` | `rainfall_lag_3w * (1.0 - sanitation_score)` | Continuous ($\ge 0.0$) | Captures expanded vector breeding containers near households during active transmission. |
+| `composite_vulnerability_index` | `0.5 * waterlog + 0.5 * (1.0 - sanitation)` | $[0.0, 1.0]$ | Establishes the static structural receptivity of the ward to vector proliferation. |
+| `density_exposure_factor` | `(density / 50,000) * composite_vulnerability` | Continuous ($\ge 0.0$) | Amplifies transmission risk in crowded wards where vectors have immediate human host access. |
 
 #### Category 5: Vector Climate Suitability Index
 To model physiological thresholds, the system computes a composite ecological suitability metric:
