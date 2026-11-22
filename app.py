@@ -452,57 +452,54 @@ st.markdown("<div style='margin-bottom: 12px;'></div>", unsafe_allow_html=True)
 # Human-Friendly Methodology & Tools Guide (Easy Bangla + English Description)
 # -----------------------------------------------------------------------------
 with st.expander("📖 সহজে বুঝুন: এই সিস্টেমে কী কী টুলস ব্যবহার করে কীভাবে কাজগুলো করা হয়েছে? (System Methodology & Tools Guide)", expanded=False):
-    st.markdown("""
-    <div style="background: #111827; border: 1px solid #1F2937; border-radius: 12px; padding: 18px 20px; margin-bottom: 10px;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <div>
-                <div style="font-size: 15px; font-weight: 800; color: #06B6D4; margin-bottom: 8px;">
-                    🧰 ১. কোন কোন টুলস ও প্রযুক্তি ব্যবহার করা হয়েছে? (Tools & Tech Stack)
-                </div>
-                <div style="font-size: 13px; color: #CBD5E1; line-height: 1.7;">
-                    • <b>Python 3.14:</b> মূল কোডিং ও পাইপলাইনের জন্য ব্যবহৃত হয়েছে।<br>
-                    • <b>Pandas & NumPy:</b> ১০ বছরের ৩১,৩২০ সারির বিশাল ডেটাসেট ক্লিন করা এবং ১–৪ সপ্তাহের মেমোরি-অপটিমাইজড ল্যাগ ফিচার তৈরির জন্য।<br>
-                    • <b>Scikit-Learn:</b> মেশিন লার্নিং মডেল (HistGradientBoosting, Random Forest, Ridge) ট্রেইনিংয়ের জন্য।<br>
-                    • <b>Streamlit & Plotly:</b> দ্রুত গতির ডার্ক-মোড ইউজার ইন্টারফেস ও ইন্টারেক্টিভ চার্ট রেন্ডার করার জন্য।<br>
-                    • <b>Pydeck & MapLibre:</b> ড্রপডাউন অনুযায়ী রিয়েল-টাইম ডার্ক থিম রিস্ক হিটম্যাপ আঁকার জন্য।<br>
-                    • <b>Joblib:</b> ট্রেইন করা মডেলটি অফলাইনে সেভ ও লোড করার জন্য (জিরো ক্লাউড খরচ)।
-                </div>
-            </div>
-            <div>
-                <div style="font-size: 15px; font-weight: 800; color: #10B981; margin-bottom: 8px;">
-                    🔄 ২. যেভাবে কাজটি ধাপে ধাপে সম্পন্ন করা হয়েছে (Step-by-Step Methodology)
-                </div>
-                <div style="font-size: 13px; color: #CBD5E1; line-height: 1.7;">
-                    • <b>ধাপ ১ (ডেটা ক্লিনিং):</b> মিসিং ভ্যালু ফিক্স ও ডেটা টাইপ অপটিমাইজেশন (মেমোরি ড্রপ ১৬ এমবি থেকে ১.৬ এমবি)।<br>
-                    • <b>ধাপ ২ (ল্যাগ ইঞ্জিনিয়ারিং):</b> প্রতিটি ওয়ার্ডে তারিখ অনুযায়ী সাজিয়ে অতীত ১, ২, ৩ ও ৪ সপ্তাহের বৃষ্টিপাত আলাদাভাবে হিসাব করা হয়েছে যাতে ভবিষ্যতে কোনো ডেটা লিকেজ না ঘটে।<br>
-                    • <b>ধাপ ৩ (ক্রোনোলজিক্যাল ট্রেইনিং):</b> ২০১৬-২০২৩ সালের ডেটা দিয়ে ট্রেইন এবং ২০২৪-২০২৫ সালের সম্পূর্ণ নতুন ডেটায় টেস্ট করা হয়েছে। কোনো র্যান্ডম স্প্লিট করা হয়নি।<br>
-                    • <b>ধাপ ৪ (ঝুঁকি ক্যাটাগরি):</b> প্রেডিকশনকে ৪টি ধাপে ভাগ করা হয়েছে: <i>Low, Medium, High, Critical</i>।
-                </div>
+    g_col1, g_col2 = st.columns(2)
+    with g_col1:
+        st.markdown("""
+        <div style="background: #111827; border: 1px solid #1F2937; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;">
+            <div style="font-size: 14.5px; font-weight: 800; color: #06B6D4; margin-bottom: 6px;">🧰 ১. কোন কোন টুলস ও প্রযুক্তি ব্যবহার করা হয়েছে? (Tools & Tech Stack)</div>
+            <div style="font-size: 12.5px; color: #CBD5E1; line-height: 1.6;">
+                • <b>Python 3.14:</b> মূল কোডিং ও পাইপলাইনের জন্য ব্যবহৃত হয়েছে।<br>
+                • <b>Pandas & NumPy:</b> ১০ বছরের ৩১,৩২০ সারির ডেটাসেট ক্লিন করা এবং ১–৪ সপ্তাহের মেমোরি-অপটিমাইজড ল্যাগ ফিচার তৈরির জন্য।<br>
+                • <b>Scikit-Learn:</b> মেশিন লার্নিং মডেল (HistGradientBoosting, Random Forest, Ridge) ট্রেইনিংয়ের জন্য।<br>
+                • <b>Streamlit & Plotly:</b> দ্রুত গতির ডার্ক-মোড ইউজার ইন্টারফেস ও ইন্টারেক্টিভ চার্ট রেন্ডার করার জন্য।<br>
+                • <b>Pydeck & MapLibre:</b> ড্রপডাউন অনুযায়ী রিয়েল-টাইম ডার্ক থিম রিস্ক হিটম্যাপ আঁকার জন্য।<br>
+                • <b>Joblib:</b> ট্রেইন করা মডেলটি অফলাইনে সেভ ও লোড করার জন্য (জিরো ক্লাউড খরচ)।
             </div>
         </div>
+        """, unsafe_allow_html=True)
         
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #1F2937;">
-            <div>
-                <div style="font-size: 15px; font-weight: 800; color: #F59E0B; margin-bottom: 8px;">
-                    🧬 ৩. আবহাওয়া ল্যাগের বৈজ্ঞানিক কারণ (Why 2–4 Week Lags Matter)
-                </div>
-                <div style="font-size: 13px; color: #CBD5E1; line-height: 1.7;">
-                    বৃষ্টি হওয়ার সাথে সাথেই কিন্তু ডেঙ্গু বাড়ে না। বৃষ্টির পানিতে মশার ডিম ফোটা (৭–১০ দিন), লার্ভা থেকে মশা হওয়া (৭–৮ দিন), এবং মশার পেটে ডেঙ্গু ভাইরাস সংখ্যাবৃদ্ধি (৮–১২ দিন) হতে <b>মোট ২ থেকে ৪ সপ্তাহ</b> সময় লাগে। এজন্য ২–৪ সপ্তাহ আগের বৃষ্টিপাত ও ওয়াটারলগিং বর্তমান ডেঙ্গু প্রাদুর্ভাবের সবচেয়ে বড় নির্দেশক।
-                </div>
-            </div>
-            <div>
-                <div style="font-size: 15px; font-weight: 800; color: #EC4899; margin-bottom: 8px;">
-                    ⚡ ৪. খরচ নিয়ন্ত্রণ ও লোকাল আর্কিটেকচার (Cost & Token Efficiency)
-                </div>
-                <div style="font-size: 13px; color: #CBD5E1; line-height: 1.7;">
-                    • এই সিস্টেমে কোনো পেইড এক্সটার্নাল এপিআই বা এলএলএম টোকেন খরচ নেই।<br>
-                    • সিরিয়ালাইজড লোকাল মডেল (joblib) ব্যবহার করায় প্রতি প্রেডিকশনে সময় লাগে মাত্র ১৫ মিলিসেকেন্ড।<br>
-                    • ইন্টারনেট সংযোগ দুর্বল হলেও সম্পূর্ণ অফলাইনে নিরবচ্ছিন্নভাবে প্রেডিকশন চালানো সম্ভব।
-                </div>
+        st.markdown("""
+        <div style="background: #111827; border: 1px solid #1F2937; border-radius: 10px; padding: 14px 16px;">
+            <div style="font-size: 14.5px; font-weight: 800; color: #F59E0B; margin-bottom: 6px;">🧬 ৩. আবহাওয়া ল্যাগের বৈজ্ঞানিক কারণ (Why 2–4 Week Lags Matter)</div>
+            <div style="font-size: 12.5px; color: #CBD5E1; line-height: 1.6;">
+                বৃষ্টি হওয়ার সাথে সাথেই কিন্তু ডেঙ্গু বাড়ে না। বৃষ্টির পানিতে মশার ডিম ফোটা (৭–১০ দিন), লার্ভা থেকে মশা হওয়া (৭–৮ দিন), এবং মশার পেটে ডেঙ্গু ভাইরাস সংখ্যাবৃদ্ধি (৮–১২ দিন) হতে <b>মোট ২ থেকে ৪ সপ্তাহ</b> সময় লাগে। এজন্য ২–৪ সপ্তাহ আগের বৃষ্টিপাত ও ওয়াটারলগিং বর্তমান ডেঙ্গু প্রাদুর্ভাবের সবচেয়ে বড় নির্দেশক।
             </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        
+    with g_col2:
+        st.markdown("""
+        <div style="background: #111827; border: 1px solid #1F2937; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px;">
+            <div style="font-size: 14.5px; font-weight: 800; color: #10B981; margin-bottom: 6px;">🔄 ২. যেভাবে কাজটি ধাপে ধাপে সম্পন্ন করা হয়েছে (Step-by-Step Methodology)</div>
+            <div style="font-size: 12.5px; color: #CBD5E1; line-height: 1.6;">
+                • <b>ধাপ ১ (ডেটা ক্লিনিং):</b> মিসিং ভ্যালু ফিক্স ও ডেটা টাইপ অপটিমাইজেশন (মেমোরি ড্রপ ১৬ এমবি থেকে ১.৬ এমবি)।<br>
+                • <b>ধাপ ২ (ল্যাগ ইঞ্জিনিয়ারিং):</b> প্রতিটি ওয়ার্ডে তারিখ অনুযায়ী অতীত ১, ২, ৩ ও ৪ সপ্তাহের বৃষ্টিপাত আলাদাভাবে হিসাব (নো ডেটা লিকেজ)।<br>
+                • <b>ধাপ ৩ (ক্রোনোলজিক্যাল ট্রেইনিং):</b> ২০১৬-২০২৩ সালের ডেটা দিয়ে ট্রেইন এবং ২০২৪-২০২৫ সালের সম্পূর্ণ নতুন ডেটায় টেস্ট।<br>
+                • <b>ধাপ ৪ (ঝুঁকি ক্যাটাগরি):</b> প্রেডিকশনকে ৪টি ধাপে ভাগ: <i>Low, Medium, High, Critical</i>।
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: #111827; border: 1px solid #1F2937; border-radius: 10px; padding: 14px 16px;">
+            <div style="font-size: 14.5px; font-weight: 800; color: #EC4899; margin-bottom: 6px;">⚡ ৪. খরচ নিয়ন্ত্রণ ও লোকাল আর্কিটেকচার (Cost & Token Efficiency)</div>
+            <div style="font-size: 12.5px; color: #CBD5E1; line-height: 1.6;">
+                • এই সিস্টেমে কোনো পেইড এক্সটার্নাল এপিআই বা এলএলএম টোকেন খরচ নেই।<br>
+                • সিরিয়ালাইজড লোকাল মডেল (joblib) ব্যবহার করায় প্রতি প্রেডিকশনে সময় লাগে মাত্র ১৫ মিলিসেকেন্ড।<br>
+                • ইন্টারনেট সংযোগ দুর্বল হলেও সম্পূর্ণ অফলাইনে নিরবচ্ছিন্নভাবে প্রেডিকশন চালানো সম্ভব।
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 st.markdown("<div style='margin-bottom: 14px;'></div>", unsafe_allow_html=True)
 
