@@ -65,8 +65,8 @@ Thumbs.db
 [Dd]esktop.ini
 
 # Model Artifacts (ignoring binary/checkpoint files, keeping models/ directory intact)
+# Note: dengue_outbreak_model.joblib is explicitly tracked for deployment
 *.pkl
-*.joblib
 *.h5
 *.hdf5
 *.pt
