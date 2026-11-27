@@ -92,6 +92,41 @@ class RedistributionTransfer(Base):
     status = Column(String(50), default="Approved")
 
 
+class HospitalRoutingPlan(Base):
+    __tablename__ = "hospital_routing_plans"
+
+    id = Column(Integer, primary_key=True)
+    plan_name = Column(String(100), default="Official Hospital Overflow Routing Plan")
+    status = Column(String(50), default="Approved")  # Approved, Revalidation Required, Rejected
+    created_at = Column(DateTime, default=datetime.utcnow)
+    approved_at = Column(DateTime, default=datetime.utcnow)
+    approved_by = Column(String(100), default="Central Health Administrator")
+    stock_percentage = Column(Float, default=100.0)
+    total_projected_demand = Column(Integer, default=0)
+    total_effective_capacity = Column(Integer, default=0)
+    total_initial_deficit = Column(Integer, default=0)
+    total_routed_overflow = Column(Integer, default=0)
+    total_net_deficit = Column(Integer, default=0)
+    shortage_resolution_percentage = Column(Float, default=0.0)
+    routing_data_json = Column(Text, nullable=False)
+
+    routing_records = relationship("HospitalRoutingRecord", back_populates="plan", cascade="all, delete-orphan")
+
+
+class HospitalRoutingRecord(Base):
+    __tablename__ = "hospital_routing_records"
+
+    id = Column(Integer, primary_key=True)
+    plan_id = Column(Integer, ForeignKey("hospital_routing_plans.id"), nullable=False)
+    source_ward_id = Column(String(50), nullable=False)
+    destination_ward_id = Column(String(50), nullable=False)
+    city = Column(String(100), nullable=False)
+    routed_overflow = Column(Integer, nullable=False)
+    approval_status = Column(String(50), default="Approved")
+
+    plan = relationship("HospitalRoutingPlan", back_populates="routing_records")
+
+
 # Engine & Session Setup
 engine = create_engine(
     f"sqlite:///{DB_PATH}",
@@ -256,6 +291,111 @@ def record_redistribution(
         )
 
         return transfer.id
+    except Exception as e:
+        session.rollback()
+        raise e
+    finally:
+        session.close()
+
+
+def save_approved_hospital_plan(
+    routing_result: Dict[str, Any],
+    plan_name: str = "Official Hospital Overflow Routing Plan",
+    approved_by: str = "Central Health Administrator",
+    stock_percentage: float = 100.0,
+) -> int:
+    """Saves an administrator-approved hospital overflow routing plan to SQLite."""
+    session = SessionLocal()
+    try:
+        reg = routing_result.get("regional_summary", {})
+        assignments = routing_result.get("routing_assignments", [])
+
+        plan = HospitalRoutingPlan(
+            plan_name=plan_name,
+            status="Approved",
+            created_at=datetime.utcnow(),
+            approved_at=datetime.utcnow(),
+            approved_by=approved_by,
+            stock_percentage=stock_percentage,
+            total_projected_demand=reg.get("total_projected_bed_demand", 0),
+            total_effective_capacity=reg.get("total_effective_bed_capacity", 0),
+            total_initial_deficit=reg.get("total_initial_bed_deficit", 0),
+            total_routed_overflow=reg.get("total_routed_overflow", 0),
+            total_net_deficit=reg.get("total_unresolved_bed_deficit", 0),
+            shortage_resolution_percentage=reg.get("overall_shortage_resolution_percentage", 0.0) or 0.0,
+            routing_data_json=json.dumps(routing_result),
+        )
+        session.add(plan)
+        session.flush()
+
+        for a in assignments:
+            rec = HospitalRoutingRecord(
+                plan_id=plan.id,
+                source_ward_id=a["source_ward_id"],
+                destination_ward_id=a["destination_ward_id"],
+                city=a["city"],
+                routed_overflow=a["routed_overflow"],
+                approval_status="Approved",
+            )
+            session.add(rec)
+
+        session.commit()
+
+        log_audit(
+            action="APPROVE_HOSPITAL_ROUTING_PLAN",
+            details=f"Hospital routing plan '{plan_name}' (ID: {plan.id}) approved. Routed: {reg.get('total_routed_overflow')} beds. Unresolved deficit: {reg.get('total_unresolved_bed_deficit')} beds.",
+            user=approved_by,
+        )
+
+        return plan.id
+    except Exception as e:
+        session.rollback()
+        raise e
+    finally:
+        session.close()
+
+
+def get_approved_hospital_plans(limit: int = 50) -> List[Dict[str, Any]]:
+    """Retrieves list of saved hospital routing plans."""
+    session = SessionLocal()
+    try:
+        plans = session.query(HospitalRoutingPlan).order_by(HospitalRoutingPlan.created_at.desc()).limit(limit).all()
+        return [
+            {
+                "id": p.id,
+                "plan_name": p.plan_name,
+                "status": p.status,
+                "created_at": p.created_at.isoformat() + "Z" if p.created_at else None,
+                "approved_at": p.approved_at.isoformat() + "Z" if p.approved_at else None,
+                "approved_by": p.approved_by,
+                "stock_percentage": p.stock_percentage,
+                "total_projected_demand": p.total_projected_demand,
+                "total_effective_capacity": p.total_effective_capacity,
+                "total_initial_deficit": p.total_initial_deficit,
+                "total_routed_overflow": p.total_routed_overflow,
+                "total_net_deficit": p.total_net_deficit,
+                "shortage_resolution_percentage": p.shortage_resolution_percentage,
+            }
+            for p in plans
+        ]
+    finally:
+        session.close()
+
+
+def revalidate_hospital_plans(reason: str = "Capacity or demand altered") -> int:
+    """Marks existing approved hospital plans as Revalidation Required when underlying inputs change."""
+    session = SessionLocal()
+    try:
+        count = session.query(HospitalRoutingPlan).filter(HospitalRoutingPlan.status == "Approved").update(
+            {"status": "Revalidation Required"}
+        )
+        session.commit()
+        if count > 0:
+            log_audit(
+                action="REVALIDATE_HOSPITAL_PLANS",
+                details=f"Marked {count} approved hospital routing plan(s) as 'Revalidation Required'. Reason: {reason}",
+            )
+        return count
     except Exception as e:
         session.rollback()
         raise e

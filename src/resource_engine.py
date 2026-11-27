@@ -11,6 +11,7 @@ import numpy as np
 import joblib
 
 from utils.ward_coordinates import ALL_WARD_COORDS, WARD_AREAS, haversine_distance_km
+from src.hospital_routing import HospitalOverflowRoutingEngine
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_DATASET = os.path.join(
@@ -370,8 +371,40 @@ class DengueResourceEngine:
             w["transferable_saline_balance"] = w["approved_saline_allocation"] - w["current_saline_bags"]
             w["transferable_kits_balance"] = w["approved_kits_allocation"] - w["current_diagnostic_kits"]
 
-        # 5. Compute Hospital Bed Overflow Routing using Capacity-Constrained Greedy Routing
-        hospital_overflow_routes = self._compute_hospital_overflow_routing(sorted_wards)
+        # 5. Compute Hospital Bed Overflow Routing using City-Constrained Priority-Based Greedy Routing
+        shared_contract_wards = HospitalOverflowRoutingEngine.build_shared_contract_from_engine_wards(
+            sorted_wards,
+            stock_percentage=stock_pct,
+        )
+        hospital_routing_result = HospitalOverflowRoutingEngine().calculate_overflow_routing(
+            shared_contract_wards,
+            scenario_name=f"Stock {int(stock_pct)}% Plan",
+        )
+        hospital_overflow_routes = self._format_hospital_overflow_routes(hospital_routing_result["routing_assignments"])
+
+        # Merge routing metrics into sorted_wards
+        routing_by_wid = {rw["ward_id"]: rw for rw in hospital_routing_result["ward_results"]}
+        for w in sorted_wards:
+            wid = w["ward_id"]
+            if wid in routing_by_wid:
+                rw = routing_by_wid[wid]
+                w.update({
+                    "hospital_beds_required": rw["hospital_beds_required"],
+                    "hospital_beds_available": rw["hospital_beds_available"],
+                    "hospital_beds_effective_capacity": rw["hospital_beds_effective_capacity"],
+                    "initial_bed_deficit": rw["initial_bed_deficit"],
+                    "initial_spare_beds": rw["initial_spare_beds"],
+                    "initial_occupied_beds": rw["initial_occupied_beds"],
+                    "initial_bed_utilization": rw["initial_bed_utilization"],
+                    "outbound_overflow": rw["outbound_overflow"],
+                    "inbound_overflow": rw["inbound_overflow"],
+                    "net_bed_deficit": rw["net_bed_deficit"],
+                    "final_projected_occupancy": rw["final_projected_occupancy"],
+                    "remaining_spare_beds": rw["remaining_spare_beds"],
+                    "final_bed_utilization": rw["final_bed_utilization"],
+                    "hospital_surge_status": rw["hospital_surge_status"],
+                    "critical_hospital_warning": rw["critical_hospital_warning"],
+                })
 
         # 6. Compute Administrator-Controlled Resource Redistribution Recommendations
         redistribution_recommendations = self._compute_redistribution_recommendations(sorted_wards)
@@ -434,63 +467,71 @@ class DengueResourceEngine:
             },
             "wards": sorted_wards,
             "hospital_overflow_routes": hospital_overflow_routes,
+            "hospital_routing": hospital_routing_result,
             "redistribution_recommendations": redistribution_recommendations,
         }
 
-    def _compute_hospital_overflow_routing(self, wards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _format_hospital_overflow_routes(self, routing_assignments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Capacity-Constrained Greedy Routing for hospital beds.
-        Treats hospital beds as fixed ward-level capacity and routes patients from deficit wards
-        to the closest surplus wards using Haversine geographic distance.
+        Formats routing assignments to be compatible with both legacy and new consumer interfaces.
         """
-        routes = []
+        formatted = []
+        for a in routing_assignments:
+            item = dict(a)
+            item.update({
+                "from_ward_id": a["source_ward_id"],
+                "from_locality": a["source_ward_name"],
+                "from_city": a["city"],
+                "from_priority": a["source_priority_score"],
+                "to_ward_id": a["destination_ward_id"],
+                "to_locality": a["destination_ward_name"],
+                "to_city": a["city"],
+                "distance_km": a.get("distance_km", 0.0) or 0.0,
+                "patients_referred": a["routed_overflow"],
+            })
+            formatted.append(item)
+        return formatted
 
-        shortage_wards = [w for w in wards if w["beds_demand"] > w["current_hospital_beds"]]
-        surplus_wards = [dict(w) for w in wards if w["current_hospital_beds"] > w["beds_demand"]]
+    def _compute_hospital_overflow_routing(self, wards: List[Dict[str, Any]], stock_pct: float = 100.0) -> List[Dict[str, Any]]:
+        """
+        City-Constrained Priority-Based Greedy Routing for hospital beds.
+        Enforces same-city routing, deterministic priority and utilization ranking.
+        """
+        contract = HospitalOverflowRoutingEngine.build_shared_contract_from_engine_wards(wards, stock_percentage=stock_pct)
+        res = HospitalOverflowRoutingEngine().calculate_overflow_routing(contract)
+        return self._format_hospital_overflow_routes(res["routing_assignments"])
 
-        # Prioritize routing the highest-priority shortage wards first
-        shortage_wards_sorted = sorted(shortage_wards, key=lambda w: w["priority_score"], reverse=True)
+    def run_hospital_routing(
+        self,
+        stock_percentage: float = 100.0,
+        custom_bed_demand: Optional[Dict[str, int]] = None,
+        custom_bed_capacity: Optional[Dict[str, int]] = None,
+        scenario_name: str = "Hospital Overflow Simulation",
+    ) -> Dict[str, Any]:
+        """
+        Executes Hospital Surge Detection & Overflow Routing with optional custom demand/capacity overrides.
+        Does NOT modify base forecasts or persistent records.
+        """
+        wards = [dict(w) for w in self._base_ward_forecasts]
+        for w in wards:
+            _, _, beds_demand = self.calculate_ward_demand(w["total_predicted_cases"])
+            w["beds_demand"] = beds_demand
 
-        for src in shortage_wards_sorted:
-            unrouted_patients = src["beds_demand"] - src["current_hospital_beds"]
-            if unrouted_patients <= 0:
-                continue
-
-            # Candidate surplus wards sorted by geographical distance
-            candidates = []
-            for dest in surplus_wards:
-                avail_beds = dest["current_hospital_beds"] - dest["beds_demand"]
-                if avail_beds > 0:
-                    dist = haversine_distance_km(src["lat"], src["lon"], dest["lat"], dest["lon"])
-                    candidates.append((dist, dest))
-
-            candidates.sort(key=lambda x: x[0])
-
-            for dist, dest in candidates:
-                if unrouted_patients <= 0:
-                    break
-                avail_beds = dest["current_hospital_beds"] - dest["beds_demand"]
-                if avail_beds <= 0:
-                    continue
-
-                routed_count = min(unrouted_patients, avail_beds)
-                dest["current_hospital_beds"] -= routed_count
-                unrouted_patients -= routed_count
-
-                routes.append({
-                    "from_ward_id": src["ward_id"],
-                    "from_locality": src["locality"],
-                    "from_city": src["city"],
-                    "from_priority": src["priority_score"],
-                    "to_ward_id": dest["ward_id"],
-                    "to_locality": dest["locality"],
-                    "to_city": dest["city"],
-                    "distance_km": dist,
-                    "patients_referred": routed_count,
-                    "rationale": f"Local bed shortage ({src['beds_demand']} demand vs {src['current_hospital_beds']} capacity). Nearest surplus hospital in {dest['locality']} ({dist} km).",
-                })
-
-        return routes
+        contract = HospitalOverflowRoutingEngine.build_shared_contract_from_engine_wards(
+            wards,
+            stock_percentage=stock_percentage,
+            custom_bed_demand=custom_bed_demand,
+            custom_bed_capacity=custom_bed_capacity,
+        )
+        return HospitalOverflowRoutingEngine().calculate_overflow_routing(
+            contract,
+            scenario_name=scenario_name,
+            simulation_params={
+                "stock_percentage": stock_percentage,
+                "custom_demand_count": len(custom_bed_demand) if custom_bed_demand else 0,
+                "custom_capacity_count": len(custom_bed_capacity) if custom_bed_capacity else 0,
+            }
+        )
 
     def _compute_redistribution_recommendations(self, wards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

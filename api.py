@@ -56,7 +56,16 @@ from src.feature_engineering import engineer_features
 from src.prediction import predict_dataframe, map_quantile_tier
 from utils.ward_coordinates import ALL_WARD_COORDS, WARD_AREAS, haversine_distance_km
 from src.resource_engine import DengueResourceEngine, DEFAULT_DATASET
-from src.database import save_approved_plan, get_audit_logs, record_redistribution, log_audit
+from src.hospital_routing import HospitalOverflowRoutingEngine
+from src.database import (
+    save_approved_plan,
+    get_audit_logs,
+    record_redistribution,
+    log_audit,
+    save_approved_hospital_plan,
+    get_approved_hospital_plans,
+    revalidate_hospital_plans,
+)
 from src.reports import generate_pdf_report, generate_html_report, generate_notification_templates
 
 # ---------------------------------------------------------------------------
@@ -161,6 +170,21 @@ class CounterfactualRequest(BaseModel):
     ward_id: str = Field(..., description="Target ward ID")
     crews_assigned: int = Field(..., ge=0, le=50, description="Number of spraying crews to deploy")
     larvicide_coverage_pct: float = Field(80.0, ge=0.0, le=100.0, description="Target breeding site larviciding coverage (%)")
+
+
+class HospitalSimulationRequest(BaseModel):
+    stock_percentage: float = Field(100.0, ge=30.0, le=100.0, description="Available regional bed capacity percentage (30-100%)")
+    custom_bed_demand: Optional[Dict[str, int]] = Field(None, description="Optional manual ward bed demand overrides for simulation")
+    custom_bed_capacity: Optional[Dict[str, int]] = Field(None, description="Optional manual ward usable bed capacity overrides")
+    scenario_name: str = Field("Hospital Overflow Simulation", description="Scenario label")
+
+
+class HospitalApprovalRequest(BaseModel):
+    plan_name: str = Field("Official Hospital Overflow Routing Plan", description="Name of the routing plan")
+    approved_by: str = Field("Central Health Administrator", description="Official approving authority")
+    stock_percentage: float = Field(100.0, ge=30.0, le=100.0)
+    custom_bed_demand: Optional[Dict[str, int]] = None
+    custom_bed_capacity: Optional[Dict[str, int]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -719,6 +743,141 @@ def get_notifications(
     )
     notifications = generate_notification_templates(result)
     return {"notifications": notifications, "count": len(notifications)}
+
+
+# ===========================================================================
+# PHASE 2: HOSPITAL SURGE & CROSS-WARD OVERFLOW ROUTING ENDPOINTS
+# ===========================================================================
+@app.get("/api/hospital-routing/current")
+def get_current_hospital_routing(
+    stock_percentage: float = Query(100.0, ge=30.0, le=100.0, description="Available regional bed capacity percentage"),
+):
+    """
+    Executes City-Constrained Priority-Based Greedy Hospital Bed Overflow Routing.
+    Returns:
+    - scenario_metadata
+    - ward_results (all 60 wards with initial & net deficits, spare beds, utilization, warnings)
+    - city_results (Dhaka North, Dhaka South, Chattogram, Gazipur, Narayanganj metrics)
+    - routing_assignments (source, dest, routed overflow, utilization before/after)
+    - regional_summary (aggregate KPIs)
+    - critical_warnings (ward and city surge alerts)
+    - dispatch_notices (deterministic local notice templates)
+    - validation_results (accounting identities verification)
+    """
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    if hasattr(stock_percentage, "default"):
+        stock_percentage = stock_percentage.default
+
+    result = _RESOURCE_ENGINE.run_hospital_routing(
+        stock_percentage=float(stock_percentage),
+        scenario_name="Current Baseline Hospital Routing Plan",
+    )
+    return result
+
+
+@app.post("/api/hospital-routing/simulate")
+def simulate_hospital_routing(payload: HospitalSimulationRequest):
+    """
+    Interactive Simulator for Hospital Bed Demand and Usable Capacity.
+    Allows administrators to adjust bed demand, usable capacity, and scarcity controls.
+    Does NOT modify the original dataset or overwrite approved routing plans.
+    """
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    result = _RESOURCE_ENGINE.run_hospital_routing(
+        stock_percentage=payload.stock_percentage,
+        custom_bed_demand=payload.custom_bed_demand,
+        custom_bed_capacity=payload.custom_bed_capacity,
+        scenario_name=payload.scenario_name,
+    )
+    return result
+
+
+@app.post("/api/hospital-routing/approve")
+def approve_hospital_routing(payload: HospitalApprovalRequest):
+    """
+    Validates and persists the administrator-approved hospital overflow routing plan to SQLite.
+    Creates immutable audit logs and records individual routing assignments.
+    """
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    # 1. Run routing engine to get canonical result
+    result = _RESOURCE_ENGINE.run_hospital_routing(
+        stock_percentage=payload.stock_percentage,
+        custom_bed_demand=payload.custom_bed_demand,
+        custom_bed_capacity=payload.custom_bed_capacity,
+        scenario_name=payload.plan_name,
+    )
+
+    # 2. Persist to SQLite database
+    plan_id = save_approved_hospital_plan(
+        routing_result=result,
+        plan_name=payload.plan_name,
+        approved_by=payload.approved_by,
+        stock_percentage=payload.stock_percentage,
+    )
+
+    reg = result["regional_summary"]
+    return {
+        "status": "Approved",
+        "plan_id": plan_id,
+        "plan_name": payload.plan_name,
+        "approved_by": payload.approved_by,
+        "approved_at": datetime.utcnow().isoformat() + "Z",
+        "total_routed_overflow": reg["total_routed_overflow"],
+        "unresolved_net_deficit": reg["total_unresolved_bed_deficit"],
+        "shortage_resolution_percentage": reg["overall_shortage_resolution_percentage"],
+        "message": f"Hospital routing plan successfully approved and recorded in official registry (Plan ID: {plan_id}).",
+    }
+
+
+@app.get("/api/hospital-routing/approved-plans")
+def get_approved_hospital_routing_plans(limit: int = Query(50, ge=1, le=200)):
+    """Retrieves all administrator-approved hospital routing plans from SQLite."""
+    plans = get_approved_hospital_plans(limit=limit)
+    return {"plans": plans, "total_records": len(plans)}
+
+
+@app.get("/api/hospital-routing/notices")
+def get_hospital_dispatch_notices(
+    stock_percentage: float = Query(100.0, ge=30.0, le=100.0),
+    city: Optional[str] = Query(None, description="Optional city filter"),
+):
+    """Returns deterministic offline template-based dispatch notices."""
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    if hasattr(stock_percentage, "default"):
+        stock_percentage = stock_percentage.default
+    if hasattr(city, "default"):
+        city = city.default
+
+    result = _RESOURCE_ENGINE.run_hospital_routing(stock_percentage=float(stock_percentage))
+    notices = result.get("dispatch_notices", [])
+    if city:
+        notices = [n for n in notices if n.get("city", "").lower() == str(city).strip().lower()]
+    return {
+        "status": "success",
+        "data": {
+            "notices": notices,
+            "count": len(notices),
+        }
+    }
+
+
+@app.post("/api/hospital-routing/revalidate")
+def revalidate_approved_plans():
+    """Marks approved plans as requiring revalidation when underlying hospital capacity or demand shifts."""
+    count = revalidate_hospital_plans(reason="Administrator triggered revalidation check")
+    return {
+        "status": "Revalidation Required",
+        "plans_affected": count,
+        "message": f"{count} approved hospital routing plan(s) marked for administrative revalidation.",
+    }
 
 
 # ===========================================================================

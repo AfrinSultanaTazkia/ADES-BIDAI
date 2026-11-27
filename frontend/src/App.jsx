@@ -24,7 +24,10 @@ import {
   Send,
   Download,
   Database,
-  ArrowRight
+  ArrowRight,
+  Copy,
+  Check,
+  FileText
 } from 'lucide-react';
 import {
   BarChart,
@@ -78,6 +81,22 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
+  // Hospital Surge & Overflow Routing State
+  const [hospitalRoutingData, setHospitalRoutingData] = useState(null);
+  const [hospitalSimCity, setHospitalSimCity] = useState('Chattogram');
+  const [hospitalSimWard, setHospitalSimWard] = useState('CCC_Ward_01');
+  const [hospitalCustomDemand, setHospitalCustomDemand] = useState({});
+  const [hospitalCustomCapacity, setHospitalCustomCapacity] = useState({});
+  const [hospitalSimulatorOpen, setHospitalSimulatorOpen] = useState(false);
+  const [hospitalNoticesOpen, setHospitalNoticesOpen] = useState(false);
+  const [hospitalTableSearch, setHospitalTableSearch] = useState('');
+  const [hospitalTableCity, setHospitalTableCity] = useState('ALL');
+  const [hospitalTableStatus, setHospitalTableStatus] = useState('ALL');
+  const [hospitalTableSort, setHospitalTableSort] = useState('priority_score');
+  const [hospitalTableSortAsc, setHospitalTableSortAsc] = useState(false);
+  const [approvedHospitalPlanMsg, setApprovedHospitalPlanMsg] = useState(null);
+  const [copiedNoticeId, setCopiedNoticeId] = useState(null);
+
   // Map reference
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -104,11 +123,66 @@ export default function App() {
       }
       const data = await res.json();
       setAllocationData(data);
+      if (data.hospital_routing) {
+        setHospitalRoutingData(data.hospital_routing);
+      }
     } catch (err) {
       console.error('Failed to load allocation data:', err);
     } finally {
       setSimulating(false);
       setLoading(false);
+    }
+  };
+
+  const fetchHospitalRouting = async (stock = stockPercentage, customDemand = null, customCapacity = null) => {
+    try {
+      setSimulating(true);
+      let res;
+      if (customDemand || customCapacity) {
+        res = await fetch('/api/hospital-routing/simulate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stock_percentage: stock,
+            custom_bed_demand: customDemand || {},
+            custom_bed_capacity: customCapacity || {},
+            scenario_name: 'Interactive Hospital Surge Simulation',
+          }),
+        });
+      } else {
+        res = await fetch(`/api/hospital-routing/current?stock_percentage=${stock}`);
+      }
+      const data = await res.json();
+      setHospitalRoutingData(data);
+    } catch (err) {
+      console.error('Failed to load hospital routing data:', err);
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const handleApproveHospitalPlan = async () => {
+    try {
+      setSimulating(true);
+      const res = await fetch('/api/hospital-routing/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan_name: `Government Hospital Routing Plan (${stockPercentage}% Capacity)`,
+          approved_by: 'Central Health Administrator',
+          stock_percentage: stockPercentage,
+          custom_bed_demand: Object.keys(hospitalCustomDemand).length > 0 ? hospitalCustomDemand : null,
+          custom_bed_capacity: Object.keys(hospitalCustomCapacity).length > 0 ? hospitalCustomCapacity : null,
+        }),
+      });
+      const data = await res.json();
+      setApprovedHospitalPlanMsg(data.message || 'Hospital routing plan approved.');
+      fetchAuditLogs();
+      setTimeout(() => setApprovedHospitalPlanMsg(null), 6000);
+    } catch (err) {
+      console.error('Failed to approve hospital plan:', err);
+    } finally {
+      setSimulating(false);
     }
   };
 
@@ -845,59 +919,710 @@ export default function App() {
         </section>
       )}
 
-      {/* 7. TAB 3: Hospital Bed Overflow Routing */}
-      {activeTab === 'hospital' && (
-        <section className="space-y-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Bed className="w-4 h-4 text-cyan-400" />
-              Capacity-Constrained Greedy Routing for Inpatient Bed Overflow
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Treats hospital beds as fixed ward-level physical assets. Wards with localized inpatient shortages are dynamically routed
-              to the nearest surplus medical facilities using Haversine great-circle distances.
-            </p>
-          </div>
+      {/* 7. TAB 3: Hospital Surge & Cross-Ward Overflow Routing */}
+      {activeTab === 'hospital' && (() => {
+        const hData = hospitalRoutingData || allocationData?.hospital_routing || {};
+        const hReg = hData?.regional_summary || {};
+        const hCities = hData?.city_results || [];
+        const hWards = hData?.ward_results || [];
+        const hRoutes = hData?.routing_assignments || [];
+        const hWarnings = hData?.critical_warnings || [];
+        const hNotices = hData?.dispatch_notices || [];
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(allocationData?.hospital_overflow_routes || []).map((route, i) => (
-              <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 hover:border-cyan-800 transition">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Deficit Ward</span>
-                    <h4 className="font-bold text-white text-sm">{route.from_ward_id}</h4>
-                    <p className="text-xs text-slate-400">{route.from_locality} ({route.from_city})</p>
+        // Filter and sort for ward-wise hospital capacity table
+        const filteredHWards = hWards.filter((w) => {
+          const matchCity = hospitalTableCity === 'ALL' || w.city === hospitalTableCity;
+          const matchSearch =
+            !hospitalTableSearch ||
+            w.ward_id.toLowerCase().includes(hospitalTableSearch.toLowerCase()) ||
+            (w.ward_name && w.ward_name.toLowerCase().includes(hospitalTableSearch.toLowerCase())) ||
+            (w.locality && w.locality.toLowerCase().includes(hospitalTableSearch.toLowerCase()));
+          const matchStatus =
+            hospitalTableStatus === 'ALL' ||
+            (hospitalTableStatus === 'CRITICAL' && w.critical_hospital_warning) ||
+            w.hospital_surge_status === hospitalTableStatus;
+          return matchCity && matchSearch && matchStatus;
+        }).sort((a, b) => {
+          let vA = a[hospitalTableSort];
+          let vB = b[hospitalTableSort];
+          if (vA === undefined || vA === null) vA = 0;
+          if (vB === undefined || vB === null) vB = 0;
+          if (typeof vA === 'string') {
+            return hospitalTableSortAsc ? vA.localeCompare(vB) : vB.localeCompare(vA);
+          }
+          return hospitalTableSortAsc ? vA - vB : vB - vA;
+        });
+
+        // Chart data: City Bed Demand vs Effective Capacity
+        const cityBarData = hCities.map((c) => ({
+          name: c.city,
+          Demand: c.total_bed_demand,
+          Capacity: c.total_effective_bed_capacity,
+          NetDeficit: c.net_bed_deficit,
+          Routed: c.total_routed_overflow,
+        }));
+
+        // Chart data: City Utilization Before vs After
+        const cityUtilData = hCities.map((c) => ({
+          name: c.city,
+          InitialUtil: c.initial_bed_utilization || 0,
+          FinalUtil: c.final_bed_utilization || 0,
+          DemandPressure: c.demand_pressure || 0,
+        }));
+
+        return (
+          <section className="space-y-5">
+            {/* Success notification banner */}
+            {approvedHospitalPlanMsg && (
+              <div className="bg-emerald-950/80 border border-emerald-600 text-emerald-200 px-4 py-3 rounded-xl flex items-center justify-between shadow-lg">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  <span className="text-sm font-semibold">{approvedHospitalPlanMsg}</span>
+                </div>
+                <button
+                  onClick={() => setApprovedHospitalPlanMsg(null)}
+                  className="text-xs bg-emerald-900 hover:bg-emerald-800 text-emerald-100 px-2 py-1 rounded"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* Critical Hospital Surge Warning Banner */}
+            {hWarnings.length > 0 && (
+              <div className="bg-red-950/80 border-2 border-red-600 rounded-xl p-4 shadow-xl shadow-red-950/40">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-extrabold text-red-200 uppercase tracking-wider">
+                        Critical Hospital Surge Alert — Unresolved Inpatient Bed Deficits
+                      </h4>
+                      <span className="text-xs bg-red-900/90 text-red-100 font-bold px-2.5 py-0.5 rounded-full border border-red-700">
+                        {hWarnings.length} Active Warnings
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                      {hWarnings.slice(0, 6).map((warn, idx) => (
+                        <div key={idx} className="bg-slate-900/90 border border-red-800/80 p-2.5 rounded-lg text-xs">
+                          <div className="flex justify-between items-center font-bold text-white">
+                            <span>{warn.entity_name} ({warn.city})</span>
+                            <span className="text-red-400 font-mono">+{warn.net_deficit} Beds Short</span>
+                          </div>
+                          <p className="text-[11px] text-slate-300 mt-1">{warn.recommended_action}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
-                      {route.distance_km} km
-                    </span>
-                  </div>
                 </div>
+              </div>
+            )}
 
-                <div className="flex items-center justify-center my-1 text-slate-600">
-                  <ArrowRight className="w-4 h-4 text-cyan-400" />
-                </div>
-
-                <div>
-                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Designated Surplus Hospital</span>
-                  <h4 className="font-bold text-white text-sm">{route.to_ward_id}</h4>
-                  <p className="text-xs text-slate-400">{route.to_locality} ({route.to_city})</p>
-                </div>
-
-                <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Patients Routed:</span>
-                  <span className="font-extrabold text-amber-400 text-sm">{route.patients_referred} Inpatient Beds</span>
-                </div>
-
-                <p className="text-[11px] text-slate-400 italic bg-slate-950 p-2 rounded border border-slate-800/80">
-                  {route.rationale}
+            {/* Main Header & Controls Bar */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                  <Bed className="w-5 h-5 text-cyan-400" />
+                  Hospital Surge Detection & City-Constrained Overflow Routing
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Enforces strict same-city capacity-constrained greedy routing across 60 urban wards in 5 city corporations.
+                  Prioritizes source wards by <code className="text-cyan-300 font-mono">(0.7×Risk + 0.3×Density)</code> and routes to lowest-utilization destination wards.
                 </p>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setHospitalSimulatorOpen(!hospitalSimulatorOpen)}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg border transition ${
+                    hospitalSimulatorOpen
+                      ? 'bg-cyan-900 text-cyan-200 border-cyan-500'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                  }`}
+                >
+                  <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+                  {hospitalSimulatorOpen ? 'Close Simulator' : 'Interactive Simulator'}
+                </button>
+
+                <button
+                  onClick={() => setHospitalNoticesOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+                >
+                  <FileText className="w-3.5 h-3.5 text-amber-400" />
+                  Dispatch Notices ({hNotices.length})
+                </button>
+
+                <button
+                  onClick={handleApproveHospitalPlan}
+                  disabled={simulating}
+                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-extrabold rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-950 transition"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Approve Routing Plan
+                </button>
+              </div>
+            </div>
+
+            {/* Regional Hospital Overview: 10 KPI Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Bed Demand</div>
+                <div className="text-2xl font-extrabold text-cyan-400 mt-1">{hReg.total_projected_bed_demand || 0}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Projected Concurrent Need</div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Effective Capacity</div>
+                <div className="text-2xl font-extrabold text-white mt-1">{hReg.total_effective_bed_capacity || 0}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Avail: {hReg.total_original_bed_availability || 0} beds</div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Initial Bed Deficit</div>
+                <div className="text-2xl font-extrabold text-amber-400 mt-1">{hReg.total_initial_bed_deficit || 0}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Across overloaded wards</div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Routed Overflow</div>
+                <div className="text-2xl font-extrabold text-emerald-400 mt-1">{hReg.total_routed_overflow || 0}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Accommodated in same city</div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Net Unresolved Deficit</div>
+                <div className={`text-2xl font-extrabold mt-1 ${(hReg.total_unresolved_bed_deficit || 0) > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {hReg.total_unresolved_bed_deficit || 0}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  Resolution: {hReg.overall_shortage_resolution_percentage !== null ? `${hReg.overall_shortage_resolution_percentage}%` : 'N/A'}
+                </div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Overloaded Wards</div>
+                <div className="text-2xl font-extrabold text-amber-400 mt-1">{hReg.total_overloaded_wards || 0}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Demand &gt; Capacity</div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Lower-Burden Wards</div>
+                <div className="text-2xl font-extrabold text-emerald-400 mt-1">{hReg.total_lower_burden_wards || 0}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Available destination wards</div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Available Spare Beds</div>
+                <div className="text-2xl font-extrabold text-teal-400 mt-1">{hReg.total_available_spare_beds || 0}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Initial surplus pool</div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Regional Utilization</div>
+                <div className="text-2xl font-extrabold text-purple-400 mt-1">
+                  {hReg.final_regional_utilization ? `${hReg.final_regional_utilization}%` : '0%'}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Initial: {hReg.initial_regional_utilization || 0}%</div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Critical Warning Wards</div>
+                <div className={`text-2xl font-extrabold mt-1 ${(hReg.critical_warning_wards_count || 0) > 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                  {hReg.critical_warning_wards_count || 0}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Require emergency beds</div>
+              </div>
+            </div>
+
+            {/* Interactive Hospital Overflow Simulator Drawer */}
+            {hospitalSimulatorOpen && (
+              <div className="bg-slate-900 border border-cyan-700/60 rounded-xl p-4 space-y-4 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-cyan-300 flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-cyan-400" />
+                      Interactive Hospital Bed Demand & Capacity Simulator
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      Simulate hypothetical disease surges or hospital capacity bottlenecks. Changes execute in-memory through the local backend and never overwrite original dataset values.
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 px-2.5 py-1 rounded border border-cyan-800">
+                    SIMULATION MODE
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1 block">Target City</label>
+                    <select
+                      value={hospitalSimCity}
+                      onChange={(e) => {
+                        const newCity = e.target.value;
+                        setHospitalSimCity(newCity);
+                        const firstWardInCity = hWards.find((w) => w.city === newCity);
+                        if (firstWardInCity) setHospitalSimWard(firstWardInCity.ward_id);
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                    >
+                      {['Chattogram', 'Dhaka North', 'Dhaka South', 'Gazipur', 'Narayanganj'].map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1 block">Target Ward</label>
+                    <select
+                      value={hospitalSimWard}
+                      onChange={(e) => setHospitalSimWard(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                    >
+                      {hWards
+                        .filter((w) => w.city === hospitalSimCity)
+                        .map((w) => (
+                          <option key={w.ward_id} value={w.ward_id}>
+                            {w.ward_id} - {w.locality}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1 block">
+                      Simulated Bed Demand (Required)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="500"
+                      value={
+                        hospitalCustomDemand[hospitalSimWard] !== undefined
+                          ? hospitalCustomDemand[hospitalSimWard]
+                          : (hWards.find((w) => w.ward_id === hospitalSimWard)?.hospital_beds_required || 0)
+                      }
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10) || 0;
+                        setHospitalCustomDemand({ ...hospitalCustomDemand, [hospitalSimWard]: val });
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1 block">
+                      Simulated Usable Bed Capacity
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="500"
+                      value={
+                        hospitalCustomCapacity[hospitalSimWard] !== undefined
+                          ? hospitalCustomCapacity[hospitalSimWard]
+                          : (hWards.find((w) => w.ward_id === hospitalSimWard)?.hospital_beds_effective_capacity || 0)
+                      }
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10) || 0;
+                        setHospitalCustomCapacity({ ...hospitalCustomCapacity, [hospitalSimWard]: val });
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setHospitalCustomDemand({});
+                      setHospitalCustomCapacity({});
+                      fetchHospitalRouting(stockPercentage, null, null);
+                    }}
+                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition"
+                  >
+                    Reset to Dataset Baseline
+                  </button>
+                  <button
+                    onClick={() => {
+                      fetchHospitalRouting(stockPercentage, hospitalCustomDemand, hospitalCustomCapacity);
+                    }}
+                    className="px-4 py-1.5 text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-lg transition shadow-md"
+                  >
+                    Recalculate Routing Simulation
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Visualizations Section: 2 Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Chart 1: Bed Demand vs Capacity by City */}
+              <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                <h4 className="text-xs font-bold text-slate-300 mb-3 flex items-center justify-between">
+                  <span>Hospital Bed Demand vs Effective Capacity by City</span>
+                  <span className="text-[10px] text-slate-500 font-normal">Independent City Networks</span>
+                </h4>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={cityBarData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                      <XAxis dataKey="name" stroke="#64748B" fontSize={10} />
+                      <YAxis stroke="#64748B" fontSize={10} />
+                      <Tooltip contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', fontSize: '11px' }} />
+                      <Legend wrapperStyle={{ fontSize: '10px' }} />
+                      <Bar dataKey="Demand" fill="#06B6D4" name="Projected Demand" />
+                      <Bar dataKey="Capacity" fill="#10B981" name="Effective Capacity" />
+                      <Bar dataKey="NetDeficit" fill="#EF4444" name="Unresolved Deficit" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Chart 2: City Bed Utilization Before vs After Routing */}
+              <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+                <h4 className="text-xs font-bold text-slate-300 mb-3 flex items-center justify-between">
+                  <span>City Bed Utilization: Before vs After Cross-Ward Routing</span>
+                  <span className="text-[10px] text-slate-500 font-normal">Cap: 100% Maximum</span>
+                </h4>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={cityUtilData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                      <XAxis dataKey="name" stroke="#64748B" fontSize={10} />
+                      <YAxis domain={[0, 120]} stroke="#64748B" fontSize={10} unit="%" />
+                      <Tooltip contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', fontSize: '11px' }} />
+                      <Legend wrapperStyle={{ fontSize: '10px' }} />
+                      <Bar dataKey="InitialUtil" fill="#94A3B8" name="Initial Utilization (%)" />
+                      <Bar dataKey="FinalUtil" fill="#A855F7" name="Post-Routing Utilization (%)" />
+                      <Bar dataKey="DemandPressure" fill="#F59E0B" name="Demand Pressure (%)" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* City-Wise Hospital Network Summary Cards */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                City-Constrained Network Summaries (Strict Local Routing)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                {hCities.map((city) => (
+                  <div
+                    key={city.city}
+                    className={`bg-slate-900 border rounded-xl p-3 space-y-2 transition ${
+                      city.net_bed_deficit > 0 ? 'border-red-900/80 hover:border-red-700' : 'border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <h5 className="font-bold text-white text-xs">{city.city}</h5>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        city.net_bed_deficit > 0 ? 'bg-red-950 text-red-300 border border-red-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                      }`}>
+                        {city.net_bed_deficit > 0 ? 'SURGE' : 'BALANCED'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1 text-[11px] pt-1 border-t border-slate-800/80">
+                      <span className="text-slate-400">Demand / Cap:</span>
+                      <span className="text-right text-slate-200 font-mono">{city.total_bed_demand} / {city.total_effective_bed_capacity}</span>
+                      <span className="text-slate-400">Routed Overflow:</span>
+                      <span className="text-right text-emerald-400 font-mono">+{city.total_routed_overflow}</span>
+                      <span className="text-slate-400">Net Deficit:</span>
+                      <span className={`text-right font-bold font-mono ${city.net_bed_deficit > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {city.net_bed_deficit}
+                      </span>
+                      <span className="text-slate-400">Final Util:</span>
+                      <span className="text-right text-purple-300 font-mono">{city.final_bed_utilization || 0}%</span>
+                    </div>
+
+                    {city.critical_warning && (
+                      <div className="text-[10px] text-red-300/90 bg-red-950/50 p-1.5 rounded border border-red-900/60 leading-tight">
+                        {city.critical_warning}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Automatic Cross-Ward Overflow Routing Table */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <ArrowRight className="w-4 h-4 text-cyan-400" />
+                    Automatic Cross-Ward Overflow Routing Assignments
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Deterministic assignments matching source deficit with lowest-utilization destination wards within the same city.
+                  </p>
+                </div>
+                <span className="text-xs bg-cyan-950 text-cyan-300 px-2.5 py-1 rounded-full border border-cyan-800 font-mono">
+                  {hRoutes.length} Active Routes
+                </span>
+              </div>
+
+              {hRoutes.length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-500 bg-slate-950 rounded-lg">
+                  No cross-ward overflow routing necessary for current capacity parameters.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-800">
+                  <table className="w-full text-left text-xs text-slate-300">
+                    <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-800">
+                      <tr>
+                        <th className="py-2.5 px-3">Source Ward</th>
+                        <th className="py-2.5 px-3">Destination Hospital</th>
+                        <th className="py-2.5 px-3">City</th>
+                        <th className="py-2.5 px-3 text-center">Priority</th>
+                        <th className="py-2.5 px-3 text-center">Source Deficit</th>
+                        <th className="py-2.5 px-3 text-center">Assigned Overflow</th>
+                        <th className="py-2.5 px-3 text-center">Dest Spare</th>
+                        <th className="py-2.5 px-3 text-center">Dest Util After</th>
+                        <th className="py-2.5 px-3 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/80">
+                      {hRoutes.map((r, i) => (
+                        <tr key={i} className="hover:bg-slate-800/50 transition">
+                          <td className="py-2 px-3 font-semibold text-white">
+                            <div>{r.source_ward_id}</div>
+                            <div className="text-[10px] text-slate-400">{r.source_ward_name}</div>
+                          </td>
+                          <td className="py-2 px-3 font-semibold text-emerald-300">
+                            <div>{r.destination_ward_id}</div>
+                            <div className="text-[10px] text-slate-400">{r.destination_ward_name} ({r.distance_km ? `${r.distance_km} km` : 'Same City'})</div>
+                          </td>
+                          <td className="py-2 px-3 text-slate-300">{r.city}</td>
+                          <td className="py-2 px-3 text-center font-mono text-cyan-300">{r.source_priority_score}</td>
+                          <td className="py-2 px-3 text-center font-mono text-slate-400">
+                            {r.source_deficit_before} &rarr; <span className="text-white font-bold">{r.source_deficit_after}</span>
+                          </td>
+                          <td className="py-2 px-3 text-center font-bold text-amber-400 font-mono">
+                            +{r.routed_overflow} Beds
+                          </td>
+                          <td className="py-2 px-3 text-center font-mono text-slate-400">
+                            {r.destination_spare_before} &rarr; <span className="text-white">{r.destination_spare_after}</span>
+                          </td>
+                          <td className="py-2 px-3 text-center font-mono text-purple-300">
+                            {r.destination_utilization_after ? `${r.destination_utilization_after}%` : '100%'}
+                          </td>
+                          <td className="py-2 px-3 text-center">
+                            <span className="bg-emerald-950 text-emerald-300 text-[10px] px-2 py-0.5 rounded font-bold border border-emerald-800">
+                              {r.approval_status || 'Recommended'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Ward-Wise Hospital Capacity Table (All 60 Wards) */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-cyan-400" />
+                    Ward-Wise Hospital Capacity & Routing Status (All 60 Wards)
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Comprehensive ledger tracking initial deficits, cross-ward routing flows, net deficits, and post-routing bed utilization.
+                  </p>
+                </div>
+
+                {/* Filters */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 px-2.5 py-1.5 rounded-lg text-xs">
+                    <Search className="w-3.5 h-3.5 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Search ward or locality..."
+                      value={hospitalTableSearch}
+                      onChange={(e) => setHospitalTableSearch(e.target.value)}
+                      className="bg-transparent text-white focus:outline-none text-xs w-36"
+                    />
+                  </div>
+
+                  <select
+                    value={hospitalTableCity}
+                    onChange={(e) => setHospitalTableCity(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200"
+                  >
+                    <option value="ALL">All Cities (5)</option>
+                    <option value="Dhaka North">Dhaka North (20)</option>
+                    <option value="Dhaka South">Dhaka South (20)</option>
+                    <option value="Chattogram">Chattogram (10)</option>
+                    <option value="Gazipur">Gazipur (5)</option>
+                    <option value="Narayanganj">Narayanganj (5)</option>
+                  </select>
+
+                  <select
+                    value={hospitalTableStatus}
+                    onChange={(e) => setHospitalTableStatus(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200"
+                  >
+                    <option value="ALL">All Surge Statuses</option>
+                    <option value="Overloaded">Overloaded</option>
+                    <option value="Fully Utilized">Fully Utilized</option>
+                    <option value="Lower-Burden">Lower-Burden</option>
+                    <option value="CRITICAL">Critical Warning</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border border-slate-800 max-h-[460px] overflow-y-auto">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider text-[10px] sticky top-0 z-10 border-b border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3">Ward ID & Locality</th>
+                      <th className="py-2.5 px-3">City</th>
+                      <th className="py-2.5 px-3 text-center">Risk / Priority</th>
+                      <th className="py-2.5 px-3 text-center">Bed Demand</th>
+                      <th className="py-2.5 px-3 text-center">Effective Cap</th>
+                      <th className="py-2.5 px-3 text-center">Initial Deficit</th>
+                      <th className="py-2.5 px-3 text-center">Outbound</th>
+                      <th className="py-2.5 px-3 text-center">Inbound</th>
+                      <th className="py-2.5 px-3 text-center">Net Deficit</th>
+                      <th className="py-2.5 px-3 text-center">Final Occupancy</th>
+                      <th className="py-2.5 px-3 text-center">Spare Beds</th>
+                      <th className="py-2.5 px-3 text-center">Final Util</th>
+                      <th className="py-2.5 px-3 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {filteredHWards.map((w) => (
+                      <tr
+                        key={w.ward_id}
+                        className={`hover:bg-slate-800/50 transition ${
+                          w.critical_hospital_warning ? 'bg-red-950/20' : w.hospital_surge_status === 'Overloaded' ? 'bg-amber-950/15' : ''
+                        }`}
+                      >
+                        <td className="py-2 px-3 font-semibold text-white">
+                          <div>{w.ward_id}</div>
+                          <div className="text-[10px] text-slate-400">{w.locality || w.ward_name}</div>
+                        </td>
+                        <td className="py-2 px-3 text-slate-300">{w.city}</td>
+                        <td className="py-2 px-3 text-center">
+                          <div className="font-mono text-cyan-300 font-bold">{w.priority_score}</div>
+                          <div className="text-[10px] text-slate-400">{w.risk_level}</div>
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono font-bold text-cyan-400">{w.hospital_beds_required}</td>
+                        <td className="py-2 px-3 text-center font-mono text-slate-300">{w.hospital_beds_effective_capacity}</td>
+                        <td className="py-2 px-3 text-center font-mono text-amber-400 font-bold">
+                          {w.initial_bed_deficit > 0 ? w.initial_bed_deficit : '0'}
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono text-emerald-400">
+                          {w.outbound_overflow > 0 ? `-${w.outbound_overflow}` : '-'}
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono text-teal-400">
+                          {w.inbound_overflow > 0 ? `+${w.inbound_overflow}` : '-'}
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono font-extrabold">
+                          {w.net_bed_deficit > 0 ? (
+                            <span className="text-red-400 bg-red-950 px-2 py-0.5 rounded border border-red-800">
+                              {w.net_bed_deficit}
+                            </span>
+                          ) : (
+                            <span className="text-emerald-400">0</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono text-white">{w.final_projected_occupancy}</td>
+                        <td className="py-2 px-3 text-center font-mono text-slate-300">{w.remaining_spare_beds}</td>
+                        <td className="py-2 px-3 text-center font-mono text-purple-300">
+                          {w.final_bed_utilization !== null ? `${w.final_bed_utilization}%` : 'N/A'}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span
+                            className={`text-[9.5px] font-bold px-2 py-0.5 rounded border ${
+                              w.critical_hospital_warning
+                                ? 'bg-red-950 text-red-300 border-red-800'
+                                : w.hospital_surge_status === 'Overloaded'
+                                ? 'bg-amber-950 text-amber-300 border-amber-800'
+                                : w.hospital_surge_status === 'Fully Utilized'
+                                ? 'bg-blue-950 text-blue-300 border-blue-800'
+                                : 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                            }`}
+                          >
+                            {w.critical_hospital_warning ? 'SURGE WARNING' : w.hospital_surge_status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Dispatch Notices Modal */}
+            {hospitalNoticesOpen && (
+              <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+                <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-slate-800 p-4">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-cyan-400" />
+                      <h4 className="text-sm font-bold text-white">
+                        Offline Template-Based Hospital Dispatch & Referral Notices
+                      </h4>
+                    </div>
+                    <button
+                      onClick={() => setHospitalNoticesOpen(false)}
+                      className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 rounded-lg"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="p-4 overflow-y-auto space-y-3 flex-1">
+                    {hNotices.length === 0 ? (
+                      <p className="text-xs text-slate-500 text-center py-8">No notices available.</p>
+                    ) : (
+                      hNotices.map((n, i) => (
+                        <div key={i} className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
+                              {n.notice_type}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-slate-500 font-mono">{n.notice_id}</span>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(n.content);
+                                  setCopiedNoticeId(n.notice_id);
+                                  setTimeout(() => setCopiedNoticeId(null), 2000);
+                                }}
+                                className="flex items-center gap-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition"
+                              >
+                                {copiedNoticeId === n.notice_id ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-400" />
+                                    <span className="text-emerald-400">Copied</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3" />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                          <pre className="text-xs font-mono text-slate-300 bg-slate-900/80 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap border border-slate-800/80">
+                            {n.content}
+                          </pre>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {/* 8. TAB 4: Inter-Ward Redistribution Engine */}
       {activeTab === 'redistribution' && (
