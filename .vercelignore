@@ -1,0 +1,13 @@
+.git/
+.venv/
+venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ipynb_checkpoints/
+**/node_modules/
+**/*.ipynb
+tests/
+frontend/dist/
+ARCHITECTURE.md
+README.md
+run.bat
