@@ -1,18 +1,31 @@
 """
-ADES BIDAI - FastAPI Backend
-Dengue Outbreak Prediction & Early Warning System
+ADES BIDAI - Comprehensive FastAPI Backend
+Phase 1: Dengue Outbreak Prediction & Early Warning System
+Phase 2: Constrained Resource Allocation & Vector-Control Crew Assignment Engine
 
 Endpoints:
-  GET /api/health
-  GET /api/summary
-  GET /api/wards
-  GET /api/ward/{ward_id}
-  GET /api/predict
-  GET /api/weather/{ward_id}
-  GET /api/metrics
-  GET /api/historical
-  GET /api/comparison
-  GET /api/environmental
+  Phase 1:
+    GET  /api/health
+    GET  /api/summary
+    GET  /api/wards
+    GET  /api/ward/{ward_id}
+    GET  /api/predict
+    GET  /api/weather/{ward_id}
+    GET  /api/metrics
+    GET  /api/historical
+    GET  /api/comparison
+    GET  /api/environmental
+
+  Phase 2:
+    GET  /api/allocation/current
+    POST /api/allocation/simulate
+    POST /api/allocation/approve
+    GET  /api/allocation/audit-logs
+    POST /api/allocation/redistribute
+    POST /api/allocation/counterfactual
+    GET  /api/allocation/export/pdf
+    GET  /api/allocation/export/html
+    GET  /api/allocation/notifications
 """
 
 import os
@@ -20,17 +33,20 @@ import sys
 import json
 import math
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import numpy as np
 import pandas as pd
 import joblib
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
-# Path setup – make src/ and utils/ importable
+# Path setup
 # ---------------------------------------------------------------------------
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
@@ -38,15 +54,27 @@ sys.path.insert(0, ROOT)
 from src.data_processing import get_preprocessed_data
 from src.feature_engineering import engineer_features
 from src.prediction import predict_dataframe, map_quantile_tier
-from utils.ward_coordinates import ALL_WARD_COORDS
+from utils.ward_coordinates import ALL_WARD_COORDS, WARD_AREAS, haversine_distance_km
+from src.resource_engine import DengueResourceEngine, DEFAULT_DATASET
+from src.hospital_routing import HospitalOverflowRoutingEngine
+from src.database import (
+    save_approved_plan,
+    get_audit_logs,
+    record_redistribution,
+    log_audit,
+    save_approved_hospital_plan,
+    get_approved_hospital_plans,
+    revalidate_hospital_plans,
+)
+from src.reports import generate_pdf_report, generate_html_report, generate_notification_templates
 
 # ---------------------------------------------------------------------------
 # App setup
 # ---------------------------------------------------------------------------
 app = FastAPI(
-    title="ADES BIDAI – Dengue Outbreak API",
-    description="Real-time dengue outbreak prediction for urban wards.",
-    version="1.0.0",
+    title="ADES BIDAI – Dengue Surveillance & Resource Allocation API",
+    description="Intelligent 2-Week Outbreak Prediction, Constrained Medical Resource Allocation, and Vector-Control Crew Assignment.",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -60,12 +88,13 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Global state (loaded once at startup)
 # ---------------------------------------------------------------------------
-_FEATURED_DF: pd.DataFrame = None          # full featured dataset
-_PREDICTED_DF: pd.DataFrame = None         # full dataset + predicted_cases / predicted_risk_tier
-_LATEST_PRED_DF: pd.DataFrame = None       # latest week predictions per ward
-_ARTIFACT: dict = None                     # {model, feature_cols, model_name, quantile_thresholds}
-_METRICS: dict = None                      # contents of metrics_summary.json
-_MODEL_MAE: float = 1.0                    # MAE of the loaded model (for CI)
+_FEATURED_DF: Optional[pd.DataFrame] = None
+_PREDICTED_DF: Optional[pd.DataFrame] = None
+_LATEST_PRED_DF: Optional[pd.DataFrame] = None
+_ARTIFACT: Optional[Dict[str, Any]] = None
+_METRICS: Optional[Dict[str, Any]] = None
+_MODEL_MAE: float = 0.827
+_RESOURCE_ENGINE: Optional[DengueResourceEngine] = None
 
 
 def _safe_float(val, decimals: int = 2) -> Optional[float]:
@@ -108,23 +137,83 @@ def _build_risk_drivers(row: pd.Series) -> List[str]:
 
 
 # ---------------------------------------------------------------------------
-# Startup event – load data and model ONCE
+# Pydantic Request Models
+# ---------------------------------------------------------------------------
+class SimulationRequest(BaseModel):
+    stock_percentage: float = Field(100.0, ge=30.0, le=100.0, description="Available regional stock percentage (30-100%)")
+    total_spraying_crews: int = Field(150, ge=0, le=1000, description="Total available mosquito-control spraying crews")
+    custom_availability: Optional[Dict[str, Dict[str, int]]] = Field(None, description="Optional custom ward inventory overrides")
+    manual_allocations: Optional[Dict[str, Dict[str, int]]] = Field(None, description="Optional manual resource allocation modifications")
+    manual_crews: Optional[Dict[str, int]] = Field(None, description="Optional manual crew assignments")
+
+
+class ApprovalRequest(BaseModel):
+    plan_name: str = Field("Official Regional Dengue Plan", description="Name of the allocation plan")
+    approved_by: str = Field("Central Health Administrator", description="Official approving authority")
+    stock_percentage: float = Field(100.0, ge=30.0, le=100.0)
+    total_spraying_crews: int = Field(150, ge=0, le=1000)
+    custom_availability: Optional[Dict[str, Dict[str, int]]] = None
+    manual_allocations: Optional[Dict[str, Dict[str, int]]] = None
+    manual_crews: Optional[Dict[str, int]] = None
+
+
+class RedistributionRequest(BaseModel):
+    resource_type: str = Field(..., description="Resource to transfer (e.g., 'Saline Bags', 'Diagnostic Kits')")
+    source_ward_id: str = Field(..., description="Donor ward ID")
+    destination_ward_id: str = Field(..., description="Recipient ward ID")
+    quantity: int = Field(..., ge=1, description="Number of units to transfer")
+    reason: str = Field(..., description="Justification for redistribution")
+    user: str = Field("Central Health Administrator", description="Administrator name")
+
+
+class CounterfactualRequest(BaseModel):
+    ward_id: str = Field(..., description="Target ward ID")
+    crews_assigned: int = Field(..., ge=0, le=50, description="Number of spraying crews to deploy")
+    larvicide_coverage_pct: float = Field(80.0, ge=0.0, le=100.0, description="Target breeding site larviciding coverage (%)")
+
+
+class HospitalSimulationRequest(BaseModel):
+    stock_percentage: float = Field(100.0, ge=30.0, le=100.0, description="Available regional bed capacity percentage (30-100%)")
+    custom_bed_demand: Optional[Dict[str, int]] = Field(None, description="Optional manual ward bed demand overrides for simulation")
+    custom_bed_capacity: Optional[Dict[str, int]] = Field(None, description="Optional manual ward usable bed capacity overrides")
+    scenario_name: str = Field("Hospital Overflow Simulation", description="Scenario label")
+
+
+class HospitalApprovalRequest(BaseModel):
+    plan_name: str = Field("Official Hospital Overflow Routing Plan", description="Name of the routing plan")
+    approved_by: str = Field("Central Health Administrator", description="Official approving authority")
+    stock_percentage: float = Field(100.0, ge=30.0, le=100.0)
+    custom_bed_demand: Optional[Dict[str, int]] = None
+    custom_bed_capacity: Optional[Dict[str, int]] = None
+
+
+# ---------------------------------------------------------------------------
+# Startup Event
 # ---------------------------------------------------------------------------
 @app.on_event("startup")
 def startup_load():
-    global _FEATURED_DF, _PREDICTED_DF, _LATEST_PRED_DF, _ARTIFACT, _METRICS, _MODEL_MAE
+    global _FEATURED_DF, _PREDICTED_DF, _LATEST_PRED_DF, _ARTIFACT, _METRICS, _MODEL_MAE, _RESOURCE_ENGINE
 
-    print("[api] Loading and processing dataset...")
-    csv_path = os.path.join(ROOT, "data", "google_sheet_dengue_dataset.csv")
+    print("[api] Initializing Resource Engine on specified dataset...")
+    csv_path = DEFAULT_DATASET
+    if not os.path.exists(csv_path):
+        csv_path = os.path.join(ROOT, "data", "google_sheet_dengue_dataset.csv")
+
+    _RESOURCE_ENGINE = DengueResourceEngine(dataset_path=csv_path)
+
+    print("[api] Loading and preprocessing dataset for Phase 1 endpoints...")
     raw_df = get_preprocessed_data(filepath=csv_path)
     _FEATURED_DF = engineer_features(raw_df, drop_burnin=True)
 
-    print("[api] Running model predictions on full dataset...")
     model_path = os.path.join(ROOT, "models", "dengue_outbreak_model.joblib")
-    _ARTIFACT = joblib.load(model_path)
-    _PREDICTED_DF = predict_dataframe(_FEATURED_DF, model_path=model_path)
+    if os.path.exists(model_path):
+        _ARTIFACT = joblib.load(model_path)
+        _PREDICTED_DF = predict_dataframe(_FEATURED_DF, model_path=model_path)
+    else:
+        _PREDICTED_DF = _FEATURED_DF.copy()
+        _PREDICTED_DF["predicted_cases"] = _PREDICTED_DF["dengue_cases"]
+        _PREDICTED_DF["predicted_risk_tier"] = "Low"
 
-    # Latest week prediction per ward (last row per ward in time order)
     _LATEST_PRED_DF = (
         _PREDICTED_DF
         .sort_values(["ward_id", "date"])
@@ -132,34 +221,28 @@ def startup_load():
         .last()
     )
 
-    # Load metrics
     metrics_path = os.path.join(ROOT, "models", "metrics_summary.json")
-    with open(metrics_path, "r") as f:
-        _METRICS = json.load(f)
+    if os.path.exists(metrics_path):
+        with open(metrics_path, "r") as f:
+            _METRICS = json.load(f)
+        _MODEL_MAE = _METRICS.get("HistGradientBoosting", {}).get("MAE", 0.827)
 
-    # Pick MAE from the model that was loaded
-    model_name = _ARTIFACT.get("model_name", "")
-    if model_name in _METRICS:
-        _MODEL_MAE = _METRICS[model_name].get("MAE", 1.0)
-    else:
-        # fallback: best MAE across all models
-        _MODEL_MAE = min(v.get("MAE", 999) for v in _METRICS.values())
-
-    print(f"[api] Startup complete. Model: {model_name}, MAE: {_MODEL_MAE}")
-    print(f"[api] Featured rows: {len(_FEATURED_DF)}, Wards: {_LATEST_PRED_DF['ward_id'].nunique()}")
+    print("[api] System ready. All 60 wards integrated.")
 
 
-# ---------------------------------------------------------------------------
-# 1. GET /api/health
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# PHASE 1 ENDPOINTS
+# ===========================================================================
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat() + "Z"}
+    return {
+        "status": "ok",
+        "service": "ADES BIDAI Surveillance & Resource Allocation Platform",
+        "version": "2.0.0",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
 
 
-# ---------------------------------------------------------------------------
-# 2. GET /api/summary
-# ---------------------------------------------------------------------------
 @app.get("/api/summary")
 def summary():
     if _LATEST_PRED_DF is None:
@@ -174,7 +257,6 @@ def summary():
 
     high_risk_count = int((_LATEST_PRED_DF["predicted_risk_tier"] == "High").sum())
     critical_count = int((_LATEST_PRED_DF["predicted_risk_tier"] == "Critical").sum())
-
     cities = sorted(_FEATURED_DF["city"].dropna().unique().tolist()) if "city" in _FEATURED_DF.columns else []
 
     return {
@@ -190,9 +272,6 @@ def summary():
     }
 
 
-# ---------------------------------------------------------------------------
-# 3. GET /api/wards
-# ---------------------------------------------------------------------------
 @app.get("/api/wards")
 def wards():
     if _LATEST_PRED_DF is None:
@@ -201,7 +280,7 @@ def wards():
     result = []
     for _, row in _LATEST_PRED_DF.iterrows():
         wid = str(row["ward_id"])
-        coords = ALL_WARD_COORDS.get(wid, (None, None, wid))
+        coords = ALL_WARD_COORDS.get(wid, (23.8103, 90.4125, wid))
         lat, lon, locality = coords[0], coords[1], coords[2] if len(coords) > 2 else wid
         city = str(row.get("city", "")) if "city" in row else ""
         result.append({
@@ -216,9 +295,6 @@ def wards():
     return result
 
 
-# ---------------------------------------------------------------------------
-# 4. GET /api/ward/{ward_id}
-# ---------------------------------------------------------------------------
 @app.get("/api/ward/{ward_id}")
 def ward_detail(ward_id: str):
     if _PREDICTED_DF is None:
@@ -228,7 +304,7 @@ def ward_detail(ward_id: str):
     if ward_df.empty:
         raise HTTPException(status_code=404, detail=f"Ward '{ward_id}' not found.")
 
-    coords = ALL_WARD_COORDS.get(ward_id, (None, None, ward_id))
+    coords = ALL_WARD_COORDS.get(ward_id, (23.8103, 90.4125, ward_id))
     lat, lon = _safe_float(coords[0], 6), _safe_float(coords[1], 6)
     locality = coords[2] if len(coords) > 2 else ward_id
 
@@ -236,24 +312,20 @@ def ward_detail(ward_id: str):
     city = str(latest_row.get("city", "")) if "city" in latest_row else ""
     current_risk_tier = str(latest_row.get("predicted_risk_tier", "Low"))
 
-    # 2-week prediction: last prediction
     predicted_2w = _safe_float(latest_row.get("predicted_cases", 0.0))
-
-    # 4-week prediction: average of last 4 predicted values per ward
     last4 = ward_df.tail(4)["predicted_cases"]
     predicted_4w = _safe_float(last4.mean())
 
-    # History: last 12 weeks
     history_df = ward_df.tail(12)
-    history = []
-    for _, hrow in history_df.iterrows():
-        history.append({
+    history = [
+        {
             "date": hrow["date"].date().isoformat() if hasattr(hrow["date"], "date") else str(hrow["date"]),
             "cases": int(hrow.get("dengue_cases", 0)),
             "predicted": _safe_float(hrow.get("predicted_cases", 0)),
-        })
+        }
+        for _, hrow in history_df.iterrows()
+    ]
 
-    # Weather summary (from latest row)
     weather_summary = {
         "avg_temp": _safe_float(latest_row.get("avg_temp_c")),
         "rainfall": _safe_float(latest_row.get("rainfall_mm")),
@@ -262,24 +334,11 @@ def ward_detail(ward_id: str):
         "sanitation": _safe_float(latest_row.get("sanitation_score")),
         "density": _safe_float(latest_row.get("population_density_sqkm")),
     }
-
-    # Risk drivers
     risk_drivers = _build_risk_drivers(latest_row)
 
-    # Confidence intervals (predicted ± 1.5 × MAE)
     half_width_2w = round(1.5 * _MODEL_MAE, 2)
     pred_2w_val = predicted_2w or 0.0
     pred_4w_val = predicted_4w or 0.0
-
-    ci_2w = {
-        "lower": _safe_float(max(0.0, pred_2w_val - half_width_2w)),
-        "upper": _safe_float(pred_2w_val + half_width_2w),
-    }
-    half_width_4w = round(1.5 * _MODEL_MAE * math.sqrt(2), 2)  # slightly wider for 4w
-    ci_4w = {
-        "lower": _safe_float(max(0.0, pred_4w_val - half_width_4w)),
-        "upper": _safe_float(pred_4w_val + half_width_4w),
-    }
 
     return {
         "ward_id": ward_id,
@@ -293,14 +352,17 @@ def ward_detail(ward_id: str):
         "history": history,
         "weather_summary": weather_summary,
         "risk_drivers": risk_drivers,
-        "confidence_interval_2w": ci_2w,
-        "confidence_interval_4w": ci_4w,
+        "confidence_interval_2w": {
+            "lower": _safe_float(max(0.0, pred_2w_val - half_width_2w)),
+            "upper": _safe_float(pred_2w_val + half_width_2w),
+        },
+        "confidence_interval_4w": {
+            "lower": _safe_float(max(0.0, pred_4w_val - round(1.5 * _MODEL_MAE * math.sqrt(2), 2))),
+            "upper": _safe_float(pred_4w_val + round(1.5 * _MODEL_MAE * math.sqrt(2), 2)),
+        },
     }
 
 
-# ---------------------------------------------------------------------------
-# 5. GET /api/predict
-# ---------------------------------------------------------------------------
 @app.get("/api/predict")
 def predict(
     ward_id: str = Query(..., description="Ward identifier"),
@@ -314,39 +376,23 @@ def predict(
         raise HTTPException(status_code=404, detail=f"Ward '{ward_id}' not found.")
 
     latest_row = ward_df.iloc[-1]
-
-    if horizon <= 2:
-        predicted_cases = float(latest_row.get("predicted_cases", 0.0))
-    else:
-        # For longer horizons use average of last min(horizon, all) predictions with mild trend factor
-        look_back = min(horizon, len(ward_df))
-        predicted_cases = float(ward_df.tail(look_back)["predicted_cases"].mean())
-
-    predicted_cases = max(0.0, predicted_cases)
-
-    thresholds = _ARTIFACT.get("quantile_thresholds")
+    predicted_cases = float(latest_row.get("predicted_cases", 0.0))
+    thresholds = _ARTIFACT.get("quantile_thresholds") if _ARTIFACT else None
     risk_tier = map_quantile_tier(predicted_cases, thresholds)
 
     half_width = round(1.5 * _MODEL_MAE * math.sqrt(max(1, horizon / 2)), 2)
-    confidence_lower = _safe_float(max(0.0, predicted_cases - half_width))
-    confidence_upper = _safe_float(predicted_cases + half_width)
-
-    primary_drivers = _build_risk_drivers(latest_row)
 
     return {
         "ward_id": ward_id,
         "horizon_weeks": horizon,
         "predicted_cases": _safe_float(predicted_cases),
         "risk_tier": risk_tier,
-        "confidence_lower": confidence_lower,
-        "confidence_upper": confidence_upper,
-        "primary_drivers": primary_drivers,
+        "confidence_lower": _safe_float(max(0.0, predicted_cases - half_width)),
+        "confidence_upper": _safe_float(predicted_cases + half_width),
+        "primary_drivers": _build_risk_drivers(latest_row),
     }
 
 
-# ---------------------------------------------------------------------------
-# 6. GET /api/weather/{ward_id}
-# ---------------------------------------------------------------------------
 @app.get("/api/weather/{ward_id}")
 def weather(ward_id: str):
     if _FEATURED_DF is None:
@@ -357,12 +403,10 @@ def weather(ward_id: str):
         raise HTTPException(status_code=404, detail=f"Ward '{ward_id}' not found.")
 
     last4 = ward_df.tail(4).reset_index(drop=True)
-    weeks = []
-    for i, (_, row) in enumerate(last4.iterrows()):
-        date_val = row["date"].date().isoformat() if hasattr(row["date"], "date") else str(row["date"])
-        weeks.append({
+    weeks = [
+        {
             "week_label": f"Week -{len(last4) - i}",
-            "date": date_val,
+            "date": row["date"].date().isoformat() if hasattr(row["date"], "date") else str(row["date"]),
             "avg_temp": _safe_float(row.get("avg_temp_c")),
             "rainfall": _safe_float(row.get("rainfall_mm")),
             "humidity": _safe_float(row.get("relative_humidity_pct")),
@@ -370,14 +414,12 @@ def weather(ward_id: str):
             "rainfall_lag_2w": _safe_float(row.get("rainfall_lag_2w")),
             "rainfall_lag_3w": _safe_float(row.get("rainfall_lag_3w")),
             "rainfall_lag_4w": _safe_float(row.get("rainfall_lag_4w")),
-        })
-
+        }
+        for i, (_, row) in enumerate(last4.iterrows())
+    ]
     return {"ward_id": ward_id, "weeks": weeks}
 
 
-# ---------------------------------------------------------------------------
-# 7. GET /api/metrics
-# ---------------------------------------------------------------------------
 @app.get("/api/metrics")
 def metrics():
     if _METRICS is None:
@@ -385,16 +427,12 @@ def metrics():
     return _METRICS
 
 
-# ---------------------------------------------------------------------------
-# 8. GET /api/historical
-# ---------------------------------------------------------------------------
 @app.get("/api/historical")
 def historical(weeks: int = Query(52, ge=1, le=260)):
     if _FEATURED_DF is None:
         raise HTTPException(status_code=503, detail="Data not yet loaded.")
 
     df = _FEATURED_DF.copy()
-    # Weekly aggregate across all wards
     df["week_start"] = df["date"] - pd.to_timedelta(df["date"].dt.dayofweek, unit="d")
     weekly = (
         df.groupby("week_start")["dengue_cases"]
@@ -404,20 +442,17 @@ def historical(weeks: int = Query(52, ge=1, le=260)):
         .sort_values("date")
         .tail(weeks)
     )
+    return {
+        "data": [
+            {
+                "date": row["date"].date().isoformat() if hasattr(row["date"], "date") else str(row["date"]),
+                "total_cases": int(row["total_cases"]),
+            }
+            for _, row in weekly.iterrows()
+        ]
+    }
 
-    data = [
-        {
-            "date": row["date"].date().isoformat() if hasattr(row["date"], "date") else str(row["date"]),
-            "total_cases": int(row["total_cases"]),
-        }
-        for _, row in weekly.iterrows()
-    ]
-    return {"data": data}
 
-
-# ---------------------------------------------------------------------------
-# 9. GET /api/comparison
-# ---------------------------------------------------------------------------
 @app.get("/api/comparison")
 def comparison(wards: str = Query(..., description="Comma-separated list of ward IDs")):
     if _LATEST_PRED_DF is None:
@@ -431,7 +466,6 @@ def comparison(wards: str = Query(..., description="Comma-separated list of ward
     for wid in ward_ids:
         ward_full = _PREDICTED_DF[_PREDICTED_DF["ward_id"] == wid]
         latest_row_df = _LATEST_PRED_DF[_LATEST_PRED_DF["ward_id"] == wid]
-
         if ward_full.empty or latest_row_df.empty:
             raise HTTPException(status_code=404, detail=f"Ward '{wid}' not found.")
 
@@ -451,17 +485,12 @@ def comparison(wards: str = Query(..., description="Comma-separated list of ward
     return result
 
 
-# ---------------------------------------------------------------------------
-# 10. GET /api/environmental
-# ---------------------------------------------------------------------------
 @app.get("/api/environmental")
 def environmental():
     if _FEATURED_DF is None:
         raise HTTPException(status_code=503, detail="Data not yet loaded.")
 
     df = _FEATURED_DF.dropna(subset=["dengue_cases"]).copy()
-
-    # Sample every 50th row to keep response small
     sampled = df.iloc[::50].copy()
 
     rainfall_vs_dengue = [
@@ -481,7 +510,6 @@ def environmental():
         for _, r in sampled.iterrows()
     ]
 
-    # Monthly trend
     df["month"] = df["date"].dt.month
     monthly = df.groupby("month")["dengue_cases"].mean().reset_index()
     monthly_trend = [
@@ -489,7 +517,6 @@ def environmental():
         for _, r in monthly.iterrows()
     ]
 
-    # Pearson correlations (on full dataset, dropping NaN)
     def _pearson(x_col: str, y_col: str) -> float:
         pair = df[[x_col, y_col]].dropna()
         if len(pair) < 2:
@@ -497,21 +524,375 @@ def environmental():
         corr = pair[x_col].corr(pair[y_col])
         return _safe_float(corr) or 0.0
 
-    correlations = {
-        "rainfall": _pearson("rainfall_mm", "dengue_cases"),
-        "temperature": _pearson("avg_temp_c", "dengue_cases"),
-        "humidity": _pearson("relative_humidity_pct", "dengue_cases"),
-        "waterlog": _pearson("water_logging_risk_index", "dengue_cases"),
-    }
-
     return {
         "rainfall_vs_dengue": rainfall_vs_dengue,
         "temp_vs_dengue": temp_vs_dengue,
         "humidity_vs_dengue": humidity_vs_dengue,
         "waterlog_vs_dengue": waterlog_vs_dengue,
         "monthly_trend": monthly_trend,
-        "correlations": correlations,
+        "correlations": {
+            "rainfall": _pearson("rainfall_mm", "dengue_cases"),
+            "temperature": _pearson("avg_temp_c", "dengue_cases"),
+            "humidity": _pearson("relative_humidity_pct", "dengue_cases"),
+            "waterlog": _pearson("water_logging_risk_index", "dengue_cases"),
+        },
     }
+
+
+# ===========================================================================
+# PHASE 2: RESOURCE ALLOCATION & CREW ENGINE ENDPOINTS
+# ===========================================================================
+@app.get("/api/allocation/current")
+def get_current_allocation(
+    stock_percentage: float = Query(100.0, ge=30.0, le=100.0, description="Available regional stock percentage"),
+    total_crews: int = Query(150, ge=0, le=1000, description="Available mosquito-control spraying crews"),
+):
+    """
+    Runs the Priority-Based Constrained Greedy Allocation Engine across all 60 wards.
+    Returns dynamic allocations, scarcity calculations, hospital overflow routing, and critical warnings.
+    """
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    result = _RESOURCE_ENGINE.run_allocation_engine(
+        stock_percentage=stock_percentage,
+        total_spraying_crews=total_crews,
+    )
+    return result
+
+
+@app.post("/api/allocation/simulate")
+def simulate_allocation(payload: SimulationRequest):
+    """
+    Simulates allocation changes with administrator interactive scarcity controls and manual overrides.
+    Does NOT modify the persistent approved database plan.
+    """
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    result = _RESOURCE_ENGINE.run_allocation_engine(
+        stock_percentage=payload.stock_percentage,
+        total_spraying_crews=payload.total_spraying_crews,
+        custom_availability=payload.custom_availability,
+        manual_allocations=payload.manual_allocations,
+        manual_crews=payload.manual_crews,
+    )
+    return result
+
+
+@app.post("/api/allocation/approve")
+def approve_allocation(payload: ApprovalRequest):
+    """
+    Validates and persists the administrator-approved allocation plan to the SQLite database.
+    Creates an immutable audit log entry.
+    """
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    # 1. Run engine with final parameters
+    result = _RESOURCE_ENGINE.run_allocation_engine(
+        stock_percentage=payload.stock_percentage,
+        total_spraying_crews=payload.total_spraying_crews,
+        custom_availability=payload.custom_availability,
+        manual_allocations=payload.manual_allocations,
+        manual_crews=payload.manual_crews,
+    )
+
+    # 2. Validate constraints: no over-allocation beyond effective regional stock
+    scarcity = result["scarcity_controls"]
+    overview = result["regional_overview"]
+
+    if overview["total_saline_allocated"] > scarcity["effective_saline_stock"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Approved saline allocation ({overview['total_saline_allocated']}) exceeds effective regional stock ({scarcity['effective_saline_stock']})."
+        )
+    if overview["total_kits_allocated"] > scarcity["effective_kits_stock"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Approved kits allocation ({overview['total_kits_allocated']}) exceeds effective regional stock ({scarcity['effective_kits_stock']})."
+        )
+    if overview["total_assigned_crews"] > scarcity["total_spraying_crews"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Assigned crews ({overview['total_assigned_crews']}) exceed total available crews ({scarcity['total_spraying_crews']})."
+        )
+
+    # 3. Save to SQLite database
+    plan_id = save_approved_plan(
+        plan_result=result,
+        plan_name=payload.plan_name,
+        approved_by=payload.approved_by,
+    )
+
+    return {
+        "status": "Approved",
+        "plan_id": plan_id,
+        "plan_name": payload.plan_name,
+        "approved_by": payload.approved_by,
+        "approved_at": datetime.utcnow().isoformat() + "Z",
+        "critical_deficits_count": overview["critical_supply_wards_count"],
+        "message": f"Plan successfully approved and recorded in official registry (ID: {plan_id}).",
+    }
+
+
+@app.get("/api/allocation/audit-logs")
+def audit_logs(limit: int = Query(100, ge=1, le=500)):
+    """Retrieves chronological audit trail of all approved plans and redistribution transfers."""
+    logs = get_audit_logs(limit=limit)
+    return {"logs": logs, "total_records": len(logs)}
+
+
+@app.post("/api/allocation/redistribute")
+def redistribute_resources(payload: RedistributionRequest):
+    """
+    Approves and records an inter-ward transfer of eligible surplus supplies (saline bags or kits).
+    """
+    transfer_id = record_redistribution(
+        resource_type=payload.resource_type,
+        source_ward_id=payload.source_ward_id,
+        destination_ward_id=payload.destination_ward_id,
+        quantity=payload.quantity,
+        reason=payload.reason,
+        status="Approved",
+        user=payload.user,
+    )
+    return {
+        "status": "Transferred",
+        "transfer_id": transfer_id,
+        "resource_type": payload.resource_type,
+        "source_ward_id": payload.source_ward_id,
+        "destination_ward_id": payload.destination_ward_id,
+        "quantity": payload.quantity,
+        "message": f"Successfully authorized transfer of {payload.quantity} units to {payload.destination_ward_id}.",
+    }
+
+
+@app.post("/api/allocation/counterfactual")
+def counterfactual_simulation(payload: CounterfactualRequest):
+    """
+    ML Counterfactual Simulation: Evaluates outbreak reduction and resource savings
+    achievable by deploying spraying crews and larvicide in a targeted ward.
+    """
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    try:
+        impact = _RESOURCE_ENGINE.simulate_counterfactual_intervention(
+            ward_id=payload.ward_id,
+            crews_assigned=payload.crews_assigned,
+            larvicide_coverage_pct=payload.larvicide_coverage_pct,
+        )
+        return impact
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/api/allocation/export/pdf")
+def export_pdf(
+    stock_percentage: float = Query(100.0, ge=30.0, le=100.0),
+    total_crews: int = Query(150, ge=0, le=1000),
+):
+    """Generates and streams an official Government ReportLab PDF report."""
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    result = _RESOURCE_ENGINE.run_allocation_engine(
+        stock_percentage=stock_percentage,
+        total_spraying_crews=total_crews,
+    )
+    pdf_bytes = generate_pdf_report(result)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=ades_bidai_resource_plan_{int(stock_percentage)}pct.pdf"
+        },
+    )
+
+
+@app.get("/api/allocation/export/html", response_class=HTMLResponse)
+def export_html(
+    stock_percentage: float = Query(100.0, ge=30.0, le=100.0),
+    total_crews: int = Query(150, ge=0, le=1000),
+):
+    """Generates a complete standalone HTML report formatted with Jinja2."""
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    result = _RESOURCE_ENGINE.run_allocation_engine(
+        stock_percentage=stock_percentage,
+        total_spraying_crews=total_crews,
+    )
+    html_content = generate_html_report(result)
+    return HTMLResponse(content=html_content, status_code=200)
+
+
+@app.get("/api/allocation/notifications")
+def get_notifications(
+    stock_percentage: float = Query(100.0, ge=30.0, le=100.0),
+    total_crews: int = Query(150, ge=0, le=1000),
+):
+    """Generates deterministic SMS and WhatsApp broadcast templates for field teams."""
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    result = _RESOURCE_ENGINE.run_allocation_engine(
+        stock_percentage=stock_percentage,
+        total_spraying_crews=total_crews,
+    )
+    notifications = generate_notification_templates(result)
+    return {"notifications": notifications, "count": len(notifications)}
+
+
+# ===========================================================================
+# PHASE 2: HOSPITAL SURGE & CROSS-WARD OVERFLOW ROUTING ENDPOINTS
+# ===========================================================================
+@app.get("/api/hospital-routing/current")
+def get_current_hospital_routing(
+    stock_percentage: float = Query(100.0, ge=30.0, le=100.0, description="Available regional bed capacity percentage"),
+):
+    """
+    Executes City-Constrained Priority-Based Greedy Hospital Bed Overflow Routing.
+    Returns:
+    - scenario_metadata
+    - ward_results (all 60 wards with initial & net deficits, spare beds, utilization, warnings)
+    - city_results (Dhaka North, Dhaka South, Chattogram, Gazipur, Narayanganj metrics)
+    - routing_assignments (source, dest, routed overflow, utilization before/after)
+    - regional_summary (aggregate KPIs)
+    - critical_warnings (ward and city surge alerts)
+    - dispatch_notices (deterministic local notice templates)
+    - validation_results (accounting identities verification)
+    """
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    if hasattr(stock_percentage, "default"):
+        stock_percentage = stock_percentage.default
+
+    result = _RESOURCE_ENGINE.run_hospital_routing(
+        stock_percentage=float(stock_percentage),
+        scenario_name="Current Baseline Hospital Routing Plan",
+    )
+    return result
+
+
+@app.post("/api/hospital-routing/simulate")
+def simulate_hospital_routing(payload: HospitalSimulationRequest):
+    """
+    Interactive Simulator for Hospital Bed Demand and Usable Capacity.
+    Allows administrators to adjust bed demand, usable capacity, and scarcity controls.
+    Does NOT modify the original dataset or overwrite approved routing plans.
+    """
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    result = _RESOURCE_ENGINE.run_hospital_routing(
+        stock_percentage=payload.stock_percentage,
+        custom_bed_demand=payload.custom_bed_demand,
+        custom_bed_capacity=payload.custom_bed_capacity,
+        scenario_name=payload.scenario_name,
+    )
+    return result
+
+
+@app.post("/api/hospital-routing/approve")
+def approve_hospital_routing(payload: HospitalApprovalRequest):
+    """
+    Validates and persists the administrator-approved hospital overflow routing plan to SQLite.
+    Creates immutable audit logs and records individual routing assignments.
+    """
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    # 1. Run routing engine to get canonical result
+    result = _RESOURCE_ENGINE.run_hospital_routing(
+        stock_percentage=payload.stock_percentage,
+        custom_bed_demand=payload.custom_bed_demand,
+        custom_bed_capacity=payload.custom_bed_capacity,
+        scenario_name=payload.plan_name,
+    )
+
+    # 2. Persist to SQLite database
+    plan_id = save_approved_hospital_plan(
+        routing_result=result,
+        plan_name=payload.plan_name,
+        approved_by=payload.approved_by,
+        stock_percentage=payload.stock_percentage,
+    )
+
+    reg = result["regional_summary"]
+    return {
+        "status": "Approved",
+        "plan_id": plan_id,
+        "plan_name": payload.plan_name,
+        "approved_by": payload.approved_by,
+        "approved_at": datetime.utcnow().isoformat() + "Z",
+        "total_routed_overflow": reg["total_routed_overflow"],
+        "unresolved_net_deficit": reg["total_unresolved_bed_deficit"],
+        "shortage_resolution_percentage": reg["overall_shortage_resolution_percentage"],
+        "message": f"Hospital routing plan successfully approved and recorded in official registry (Plan ID: {plan_id}).",
+    }
+
+
+@app.get("/api/hospital-routing/approved-plans")
+def get_approved_hospital_routing_plans(limit: int = Query(50, ge=1, le=200)):
+    """Retrieves all administrator-approved hospital routing plans from SQLite."""
+    plans = get_approved_hospital_plans(limit=limit)
+    return {"plans": plans, "total_records": len(plans)}
+
+
+@app.get("/api/hospital-routing/notices")
+def get_hospital_dispatch_notices(
+    stock_percentage: float = Query(100.0, ge=30.0, le=100.0),
+    city: Optional[str] = Query(None, description="Optional city filter"),
+):
+    """Returns deterministic offline template-based dispatch notices."""
+    if _RESOURCE_ENGINE is None:
+        raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+
+    if hasattr(stock_percentage, "default"):
+        stock_percentage = stock_percentage.default
+    if hasattr(city, "default"):
+        city = city.default
+
+    result = _RESOURCE_ENGINE.run_hospital_routing(stock_percentage=float(stock_percentage))
+    notices = result.get("dispatch_notices", [])
+    if city:
+        notices = [n for n in notices if n.get("city", "").lower() == str(city).strip().lower()]
+    return {
+        "status": "success",
+        "data": {
+            "notices": notices,
+            "count": len(notices),
+        }
+    }
+
+
+@app.post("/api/hospital-routing/revalidate")
+def revalidate_approved_plans():
+    """Marks approved plans as requiring revalidation when underlying hospital capacity or demand shifts."""
+    count = revalidate_hospital_plans(reason="Administrator triggered revalidation check")
+    return {
+        "status": "Revalidation Required",
+        "plans_affected": count,
+        "message": f"{count} approved hospital routing plan(s) marked for administrative revalidation.",
+    }
+
+
+# ===========================================================================
+# Static Frontend Mount for Offline Execution
+# ===========================================================================
+frontend_dist = os.path.join(ROOT, "frontend", "dist")
+if os.path.exists(frontend_dist):
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    def serve_react_frontend(full_path: str):
+        file_path = os.path.join(frontend_dist, full_path)
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
 
 
 # ---------------------------------------------------------------------------

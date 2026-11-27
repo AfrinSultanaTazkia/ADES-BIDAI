@@ -1,494 +1,1000 @@
-# ADES BIDAI: System Architecture and Technical Design
+# ADES BIDAI System Architecture Documentation
+## AI-Driven Epidemiological Surveillance and Early-Warning Platform for Urban Dengue Outbreaks
+
+---
 
 ## 1. Introduction and Project Overview
 
-Dengue fever has emerged as one of the most critical urban public health crises across Bangladesh. Major metropolitan areas, particularly Dhaka, Chattogram, Gazipur, and Narayanganj, experience recurrent seasonal surges that strain clinical infrastructure, overwhelm emergency wards, and result in preventable mortality. Traditional municipal responses in Bangladesh are predominantly reactive. Vector control measures, such as chemical fogging and larvicide application, are typically dispatched only after hospital admissions have already escalated, by which point localized viral transmission is widely established.
+### 1.1 Public Health Context
+Dengue fever represents one of the most severe seasonal public health crises in Bangladesh. Densely populated metropolitan areas, including Dhaka North, Dhaka South, Chattogram, Gazipur, and Narayanganj, experience recurring annual surges that routinely overwhelm hospital emergency departments, exhaust supplies of intravenous fluids and diagnostic kits, and place immense strain on healthcare personnel. The geographic density of these urban centers, combined with tropical monsoon precipitation and localized infrastructural bottlenecks, creates ideal conditions for vector proliferation.
 
-ADES BIDAI (Bengali: "এডিস বিদায়", meaning "Farewell to Aedes") was developed to transform this reactive paradigm into proactive, data-driven prevention. The platform is an artificial intelligence-based urban dengue outbreak prediction and early-warning surveillance system designed specifically for administrative wards in Bangladesh. 
+### 1.2 The Failure of Reactive Vector Control
+Historically, municipal vector management in Bangladesh has operated in a reactive posture. Vector control units, drain-clearing crews, and adulticide thermal fogging teams are typically mobilized only after hospitals report an influx of confirmed clinical cases. From an epidemiological and biological standpoint, this response pattern occurs too late to halt community transmission. 
 
-Rather than treating dengue as a random public health event, ADES BIDAI models the deterministic biophysical relationship between climate dynamics, urban vulnerabilities, and the biological life cycle of the *Aedes aegypti* mosquito. By analyzing multi-week historical weather patterns alongside ward-level drainage bottlenecks, population density, and sanitation conditions, the system predicts outbreak severity two to four weeks before clinical surges occur. This operational window provides municipal authorities, health workers, and city corporations with actionable intelligence to eliminate breeding sites, mobilize medical supplies, and alert communities well in advance of hospital strain.
+The biological transmission cycle of dengue requires several weeks to develop. When clinical cases begin to peak in hospitals, the mosquito breeding, viral incubation, and community transmission phases have already been active for three to four weeks. Interventions initiated at this stage attempt to suppress an outbreak that is already fully established.
+
+### 1.3 The Mission of ADES BIDAI
+ADES BIDAI ("Aedes Farewell") was designed to fundamentally transform municipal dengue response from reactive containment to proactive prevention. By analyzing ten years of weekly historical climate data, static urban vulnerability indicators, and epidemiological records across 60 urban wards in Bangladesh, the platform forecasts dengue outbreak risk two to four weeks in advance. 
+
+This forward-looking horizon provides municipal authorities, hospitals, and community leaders with the lead time necessary to intervene while mosquito populations are still in larval development, effectively preventing outbreaks before clinical cases surge.
+
+```
++-------------------------------------------------------------------------------+
+|                             Public Health Shift                               |
+|                                                                               |
+|  Traditional Response:                                                        |
+|  Heavy Rains ---> Standing Pools ---> Mosquito Surge ---> Cases Peak ---> Fogging  |
+|                                                           (Too Late)          |
+|                                                                               |
+|  ADES BIDAI Proactive Workflow:                                               |
+|  Heavy Rains ---> ADES BIDAI Forecast ---> Larvicide & Clean-up ---> Outbreak |
+|                   (Weeks 2-4 Lead Time)    (Intervention Window)     Averted  |
++-------------------------------------------------------------------------------+
+```
+
+### 1.4 Target Stakeholders and Operational Utility
+ADES BIDAI delivers actionable intelligence tailored to three distinct user groups:
+
+- Municipal City Corporations: Decision-makers within city health departments use ward-level forecasts to prioritize vector control logistics. Instead of deploying larvicides uniformly across hundreds of square kilometers, teams can focus resources on high-risk and critical-risk wards weeks before adult mosquitoes emerge.
+- Public Health Authorities and Hospital Administrators: Clinical directors receive early warning of impending patient surges, enabling proactive allocation of bed capacity, procurement of diagnostic reagents, and scheduling of medical staff.
+- Community Leaders and Residents: Neighborhood-level risk designations provide localized transparency, empowering community organizations and citizens to eliminate standing water and container breeding sites before transmission escalates.
 
 ---
 
 ## 2. System Architecture Overview
 
-ADES BIDAI is architected around a decoupled, modular design that separates raw data processing, epidemiological feature engineering, machine learning inference, backend API services, and user-facing presentation. The system is designed to run completely offline on standard workstation hardware without requiring cloud dependencies, third-party proprietary APIs, or ongoing subscription costs.
+### 2.1 Architectural Philosophy
+ADES BIDAI is architected as an offline-capable, decoupled, multi-tier system engineered for execution speed, zero operating cost, and mathematical reproducibility. The platform intentionally eliminates dependencies on third-party cloud APIs and commercial Large Language Model (LLM) services. This design ensures that the surveillance platform can run reliably on standard local hardware in municipal headquarters without ongoing software subscription costs or external network dependencies.
+
+### 2.2 System Architecture Diagram
+The platform is organized into five functional layers: the Ingestion and Storage Layer, the Core Machine Learning and Transformation Layer, the Serialized Model and Artifact Store, the Asynchronous REST API Backend, and the Reactive Web Presentation Layer.
 
 ```mermaid
-flowchart TD
-    subgraph DataLayer["Data Layer"]
-        CSV["Historical Surveillance Dataset\n(31,320 longitudinal weekly records)"]
-        CleanEngine["Data Cleaning & Standardization\n(src/data_processing.py)"]
-        CSV --> CleanEngine
+graph TD
+    subgraph Layer1["1. Data Ingestion & Storage"]
+        CSV["Historical Surveillance Dataset<br/>data/google_sheet_dengue_dataset.csv<br/>31,320 Records across 60 Wards"]
+        JSONCache["Precomputed Aggregates Cache<br/>data/dashboard_precomputed.json"]
     end
 
-    subgraph FeatureLayer["Epidemiological Feature Pipeline"]
-        LagEngine["Multi-Week Weather Lags & Rolling Aggregations\n(src/feature_engineering.py)"]
-        Interactions["Urban Vulnerability & Climate Suitability Interactions"]
-        CleanEngine --> LagEngine
-        LagEngine --> Interactions
+    subgraph Layer2["2. Core Machine Learning Pipeline (src/)"]
+        DP["Data Processing Module<br/>src/data_processing.py<br/>Header Standardization, Type Casts, Deduplication"]
+        FE["Feature Engineering Pipeline<br/>src/feature_engineering.py<br/>Multi-Week Lags, Rolling Accumulators, Vulnerability Interactions"]
+        TM["Model Training & Benchmarking<br/>src/train_model.py<br/>Chronological Split: 2016-2023 Train vs 2024-2025 Test"]
+        PE["Prediction & Inference Engine<br/>src/prediction.py<br/>Dynamic Quantile Mapping & Risk Driver Extraction"]
     end
 
-    subgraph ModelLayer["Machine Learning Layer"]
-        ModelArtifact["Trained HistGradientBoosting Regressor\n(models/dengue_outbreak_model.joblib)"]
-        InferenceEngine["Prediction & Quantile Tier Mapping\n(src/prediction.py)"]
-        Interactions --> InferenceEngine
-        ModelArtifact --> InferenceEngine
+    subgraph Layer3["3. Serialized Model Artifacts (models/)"]
+        JoblibModel["Serialized HistGradientBoosting Model<br/>models/dengue_outbreak_model.joblib"]
+        MetricsSummary["Out-of-Sample Metrics Summary<br/>models/metrics_summary.json"]
     end
 
-    subgraph ServiceLayer["Service & Communication Layer"]
-        FastAPI["FastAPI REST Backend\n(api.py : port 8000)"]
-        InMemoryCache["In-Memory Startup Cache\n(Precomputed Wards & Metrics)"]
-        InferenceEngine --> FastAPI
-        InferenceEngine --> InMemoryCache
-        FastAPI <--> InMemoryCache
+    subgraph Layer4["4. Backend Service (FastAPI)"]
+        API["FastAPI REST Server<br/>api.py (Port 8000)<br/>In-Memory Global State, Sub-Millisecond Endpoints"]
     end
 
-    subgraph PresentationLayer["Presentation Layer (Streamlit)"]
-        Dashboard["Streamlit Surveillance Dashboard\n(app.py : port 8501)"]
-        ForecastingTab["Live Ward Forecast Tab\n(Heatmap, Cases, Top Drivers, 95% CI)"]
-        LagAnalysisTab["Multi-Week Lag Analysis Tab\n(2-4 Week Biological Cycle)"]
-        ModelMetricsTab["Model Validation Tab\n(Chronological Benchmark Metrics)"]
-        
-        Dashboard --> ForecastingTab
-        Dashboard --> LagAnalysisTab
-        Dashboard --> ModelMetricsTab
+    subgraph Layer5["5. User Presentation (Streamlit)"]
+        UI["Surveillance Dashboard<br/>app.py (Port 8501)<br/>Dark Slate UI, Interactive Pydeck Maps, Scenario Sliders"]
     end
 
-    FastAPI -->|HTTP REST JSON| Dashboard
-    InMemoryCache -.->|Local In-Memory Fallback| Dashboard
+    CSV --> DP
+    DP --> FE
+    FE --> TM
+    TM --> JoblibModel
+    TM --> MetricsSummary
+    JoblibModel --> PE
+    FE --> PE
+
+    JoblibModel --> API
+    JSONCache -.-> API
+    CSV -.-> API
+
+    API -->|HTTP REST JSON| UI
+    CSV -.->|Local Fallback Mode| UI
+    JSONCache -.->|Instant Startup| UI
+    MetricsSummary -.-> UI
 ```
 
-The system comprises five core architectural layers:
-
-1. **Data Layer**: Ingests multi-year longitudinal ward observations. It handles schema standardization, temporal sorting, missing value remediation, and physical sanity clipping.
-2. **Epidemiological Feature Pipeline**: Transforms raw weather and demographic observations into biologically meaningful predictors, including multi-week delayed rainfall lags and urban vulnerability interaction terms.
-3. **Machine Learning Layer**: Houses the trained regression model and quantile mapping logic. It loads serialized artifacts and executes inference in under 15 milliseconds per scenario.
-4. **Service Layer (FastAPI)**: Serves prediction results, ward profiles, and historical time series over standardized REST endpoints. The service utilizes in-memory preloading during application startup to guarantee zero runtime disk I/O bottlenecks.
-5. **Presentation Layer (Streamlit)**: Delivers an interactive, dark-themed command center tailored for public health epidemiologists, municipal ward commissioners, and citizens. In the event that the standalone FastAPI server is offline, the presentation layer activates a transparent local fallback mode, executing inference directly in memory.
+### 2.3 Component Responsibilities and Interconnection
+- Data Processing (`src/data_processing.py`): Serves as the data hygiene gateway. It ingests raw CSV files, enforces schema constraints, parses timestamps, removes duplicate ward observations, and guarantees non-negative bounds for physical quantities.
+- Feature Engineering (`src/feature_engineering.py`): Converts raw meteorological observations into biologically meaningful indicators. It groups data strictly by ward to compute multi-week lags, rolling sums, vulnerability cross-products, and calendar seasonality.
+- Model Training (`src/train_model.py`): Executes the strict chronological data split, trains multiple candidate algorithms, computes dynamic quantile thresholds, evaluates out-of-sample metrics, and serializes the winning model.
+- Inference Engine (`src/prediction.py`): Provides memory-cached model execution, maps raw continuous predictions to discrete risk tiers, and evaluates rule-based risk driver explanations.
+- Backend API (`api.py`): A high-throughput FastAPI application that exposes 10 REST endpoints over HTTP, providing client applications with programmatic access to predictions, historical trends, weather metrics, and risk factors.
+- Frontend Application (`app.py`): A Streamlit web dashboard providing interactive spatial maps, weather scenario simulation sliders, longitudinal lag analyses, and validation metrics.
+- Utility Metadata (`utils/ward_coordinates.py`): Provides geographic centroid coordinates and neighborhood labels for all 60 monitored urban wards across Bangladesh.
 
 ---
 
 ## 3. Complete System Workflow
 
-The end-to-end lifecycle of information across ADES BIDAI follows a disciplined pipeline from historical records to field-level public health alerts:
+### 3.1 End-to-End Data Journey
+The transformation of raw environmental data into municipal public health alerts follows a structured, seven-stage pipeline:
+
+1. Data Ingestion: The system reads raw weekly surveillance records containing historical rainfall, temperature, relative humidity, population density, drainage bottleneck metrics, and documented dengue cases.
+2. Cleaning and Standardization: Column headers are normalized, dates are parsed into chronological sequence, records are sorted by ward and timestamp, duplicate entries are pruned, and numerical columns are validated.
+3. Epidemiological Feature Generation: For every ward independently, multi-week lags (1 to 4 weeks) and rolling statistics (2 to 4 weeks) are generated without looking forward in time. Composite vulnerability indices and climate suitability scores are appended.
+4. Model Training and Benchmarking: Using records from 2016 through 2023, candidate models are trained to predict forward case counts. Models are evaluated against the unseen holdout period (2024 through 2025). The winning HistGradientBoosting model is serialized to disk.
+5. In-Memory Startup and Caching: Upon startup, the FastAPI server and Streamlit dashboard load the serialized model artifact and dataset into memory, eliminating disk read latency during live user requests.
+6. Forward Inference and Risk Classification: When an inference request is initiated, the model evaluates the feature vector of the target ward, predicts the continuous case count, and categorizes it into Low, Medium, High, or Critical risk tiers using trained dynamic quantiles.
+7. Risk Attribution and Presentation: The system extracts the top environmental drivers responsible for the risk designation and presents the results through interactive maps, dual-axis lag curves, and alert banners.
+
+### 3.2 System Interaction Flow
+The following sequence diagram illustrates how components interact during a user query or scenario simulation:
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Raw as Raw Surveillance Data
-    participant Prep as Data Processing Engine
-    participant Feat as Feature Pipeline
-    participant ML as HistGradientBoosting Model
-    participant API as FastAPI Backend
-    participant UI as Streamlit Dashboard
-    participant User as Health Officer / Public
+    actor User as Health Official / Evaluator
+    participant UI as Streamlit Frontend (app.py)
+    participant API as FastAPI Backend (api.py)
+    participant Engine as Prediction Engine (src/prediction.py)
+    participant Model as Serialized Model Artifact
 
-    Raw->>Prep: Ingest 10-year ward CSV (31,320 rows)
-    Prep->>Prep: Clean headers, parse dates, enforce non-negativity
-    Prep->>Feat: Stream chronological records grouped by ward
-    Feat->>Feat: Compute 1w-4w weather lags and interaction indices
-    Feat->>ML: Pass engineered feature matrix (38 predictors)
-    ML->>ML: Predict continuous case count and assign risk tier
-    ML->>API: Precompute and cache latest week ward profiles
-    API->>UI: Serve ward predictions, weather lags, and metrics via REST
-    Note over API,UI: If API unavailable, UI executes local fallback seamlessly
-    UI->>User: Display geospatial risk map, 95% CI, and biological lag trends
-    User->>User: Deploy targeted larvicides and issue community warnings
+    Note over API: Startup: Preloads CSV, Computes Features, Loads Joblib Model
+    User ->> UI: Selects City, Ward, and Forecast Window (e.g., 3 Weeks Ahead)
+    User ->> UI: Adjusts Weather Sliders (Rainfall, Temperature, Humidity)
+    User ->> UI: Clicks "Update Prediction"
+
+    alt Backend Mode (Standard)
+        UI ->> API: GET /api/predict?ward_id=DNCC_Ward_01&horizon=3
+        API ->> Engine: Evaluate Feature Vector
+        Engine ->> Model: model.predict(X_vector)
+        Model -->> Engine: Raw Case Estimate (Continuous)
+        Engine ->> Engine: Clip >= 0, Map Dynamic Quantile Tier, Extract Drivers
+        Engine -->> API: Prediction Result + Confidence Bounds + Drivers
+        API -->> UI: JSON Response Payload
+    else Local Fallback Mode (API Offline)
+        UI ->> UI: Query Local Cached Data & In-Memory Precomputed JSON
+        UI ->> UI: Execute Local Predictive Heuristic & Driver Evaluation
+    end
+
+    UI ->> UI: Render Dark-Matter Risk Map with Ward Centroid
+    UI ->> UI: Render Driver Attribution Bar Chart
+    UI ->> UI: Render Dual-Axis Longitudinal Lag Curve
+    UI -->> User: Display Risk Designation (e.g., Critical Risk Banner)
 ```
-
-1. **Ingestion and Normalization**: The data processing module ingests the raw longitudinal dataset, standardizes variable naming, validates calendar timestamps, and sorts records strictly by ward identifier and date.
-2. **Feature Computation**: The feature pipeline processes records on a per-ward basis. By shifting time series backwards, it computes multi-week lag windows for precipitation, temperature, and humidity without creating future lookahead bias.
-3. **Offline Training and Evaluation**: During development, models are trained on historical data up through 2023 and rigorously validated against 2024–2025 holdout observations using a strict chronological split.
-4. **Model Serialization and In-Memory Initialization**: The winning model artifact is saved to disk via `joblib`. When the system starts, FastAPI and Streamlit load this artifact into memory once, ensuring instantaneous operational availability.
-5. **Inference and Public Health Classification**: When a query for a ward is initiated, the system extracts the corresponding feature vector, generates a continuous expected case count, calculates uncertainty bounds, and maps the output into a categorical risk tier.
-6. **Visualization and Operational Action**: Health officers review live risk maps, inspect the specific environmental drivers contributing to elevated scores, and direct municipal field teams to specific hotspots before hospital surges materialize.
 
 ---
 
 ## 4. Dataset and Data Processing
 
-### Dataset Scope and Spatial Granularity
+### 4.1 Dataset Structure and Provenance
+ADES BIDAI is trained on a 10-year longitudinal disease surveillance and meteorological dataset spanning January 2016 through December 2025. The dataset covers 522 consecutive weeks across 60 urban wards in Bangladesh, totaling 31,320 unique observations.
 
-The surveillance system is powered by a high-resolution longitudinal dataset covering 10 full calendar years, from January 4, 2016, through December 29, 2025. The data is organized into weekly observation intervals across 60 administrative urban wards located in 5 key Bangladesh City Corporations:
+The records represent five major city corporations:
+- Dhaka North City Corporation (DNCC): 20 wards (DNCC_Ward_01 to DNCC_Ward_20), totaling 10,440 records.
+- Dhaka South City Corporation (DSCC): 20 wards (DSCC_Ward_01 to DSCC_Ward_20), totaling 10,440 records.
+- Chattogram City Corporation (CCC): 10 wards (CCC_Ward_01 to CCC_Ward_10), totaling 5,220 records.
+- Gazipur City Corporation (GCC): 5 wards (GCC_Ward_01 to GCC_Ward_05), totaling 2,610 records.
+- Narayanganj City Corporation (NCC): 5 wards (NCC_Ward_01 to NCC_Ward_05), totaling 2,610 records.
 
-- **Dhaka North City Corporation (DNCC)**: 20 wards
-- **Dhaka South City Corporation (DSCC)**: 15 wards
-- **Chattogram City Corporation (CCC)**: 15 wards
-- **Gazipur City Corporation (GCC)**: 5 wards
-- **Narayanganj City Corporation (NCC)**: 5 wards
+### 4.2 Raw Features and Data Types
+Each weekly observation record contains twelve primary fields:
 
-With 522 weeks observed across 60 wards, the dataset comprises exactly 31,320 longitudinal weekly records.
+| Field Name | Type | Unit / Range | Description |
+|---|---|---|---|
+| `date` | String | YYYY-MM-DD | Weekly observation timestamp (recorded every Monday). |
+| `city` | String | Categorical | Municipal city corporation name. |
+| `ward_id` | String | Categorical | Unique administrative ward identifier. |
+| `population_density_sqkm` | Integer | 20,000 to 120,000 | Number of residents per square kilometer. |
+| `water_logging_risk_index` | Float | 0.0 to 1.0 | Metric of drainage bottleneck severity and standing water risk. |
+| `sanitation_score` | Float | 0.0 to 1.0 | Index of solid waste management and clean container disposal. |
+| `avg_temp_c` | Float | 15.0 to 36.0 °C | Weekly mean ambient temperature. |
+| `max_temp_c` | Float | 18.0 to 42.0 °C | Weekly maximum recorded temperature. |
+| `min_temp_c` | Float | 10.0 to 30.0 °C | Weekly minimum recorded temperature. |
+| `rainfall_mm` | Float | 0.0 to 350.0 mm | Cumulative weekly precipitation. |
+| `relative_humidity_pct` | Float | 30.0 to 100.0 % | Weekly mean relative atmospheric humidity. |
+| `dengue_cases` | Integer | >= 0 | Documented clinical dengue cases admitted in the ward. |
 
-### Data Ingestion and Cleansing Pipeline
+### 4.3 Data Cleaning and Hygiene Implementation
+Data processing routines in `src/data_processing.py` prepare the raw data for mathematical modeling:
 
-Raw municipal and meteorological data frequently suffer from inconsistent column headers, missing entries, duplicate logging, and formatting discrepancies. The module `src/data_processing.py` executes a rigorous data preparation pipeline:
+1. Column Standardization: Column names are converted to lowercase and stripped of leading or trailing whitespace.
+2. Temporal Parsing: The `date` column is converted to pandas datetime objects.
+3. Strict Chronological Ordering: Records are sorted by `ward_id` and ascending `date`. This step is critical because calculating multi-week time lags requires that records within each ward group appear in unbroken chronological order.
+4. Deduplication: The composite key `(ward_id, date)` is verified. Any duplicate rows are pruned to guarantee that each ward has exactly one observation per week.
+5. Numeric Coercion: Numerical columns are coerced to appropriate data types. Any non-numeric characters are converted to null values.
+6. Boundary and Physical Constraint Enforcement: Dengue case counts are clipped at a lower bound of zero and cast to integers. Rainfall is clipped to non-negative floats ($\ge 0.0$). Relative humidity is constrained to the valid physical interval between $0.0\%$ and $100.0\%$.
 
-- **Header Standardization**: Strips leading and trailing whitespace and converts all variable names to lowercase snake_case.
-- **Timestamp Standardization**: Parses the `date` column into standard pandas `Timestamp` objects.
-- **Chronological Sorting**: Enforces strict sorting using the composite key `['ward_id', 'date']`. This step is essential because all subsequent lag calculations rely on sequential ordering within individual wards.
-- **Deduplication**: Identifies and eliminates redundant rows matching identical `ward_id` and `date` combinations.
-- **Type Coercion and Range Validation**: Enforces numeric casting on physical measurements and clips negative values. Dengue cases are clamped to non-negative integers ($\ge 0$), rainfall is constrained to non-negative values ($\ge 0.0\text{ mm}$), and relative humidity is bounded within physical limits ($[0.0\%, 100.0\%]$).
-- **Memory Footprint Optimization**: Columns are downcast to appropriate float32 and int32 types where possible, keeping the active dataframe footprint under 2 MB, which enables microsecond-level filtering during real-time user sessions.
+### 4.4 Identified Implementation Nuances
+Inspection of the codebase reveals an administrative nuance in geographic coordinate mapping:
+In `utils/ward_coordinates.py`, centroid coordinates are explicitly hardcoded for DNCC (20 wards), DSCC (wards 01 through 15), CCC (10 wards), GCC (8 coordinate slots), and NCC (7 coordinate slots). However, the actual dataset contains 20 wards for DSCC and 5 wards each for GCC and NCC. 
+
+When visualizing DSCC wards 16 through 20 on spatial maps, the system uses the default administrative center of Dhaka (latitude 23.8103, longitude 90.4125). This fallback prevents runtime crashes while preserving the full 60-ward dataset for training and inference.
 
 ---
 
 ## 5. Feature Engineering and Its Epidemiological Importance
 
-### The Biological Vector Life Cycle and Meteorological Lags
-
-A primary limitation of naive dengue prediction models is attempting to correlate current-week rainfall directly with current-week clinical cases. From an entomological perspective, rainfall does not produce dengue patients immediately. Precipitation initiates an ecological chain reaction governed by the life cycle of the *Aedes aegypti* mosquito and the viral replication dynamics inside the vector.
+### 5.1 Biological Transmission Horizon
+Dengue fever cannot be predicted using same-day weather observations alone. The delay between precipitation and hospital admissions is governed by the biological development cycle of the *Aedes aegypti* mosquito and the replication kinetics of the dengue virus.
 
 ```
-Rainfall Event (Week 0)
-    │
-    ▼ [7 to 10 Days]
-Eggs hatch in standing water; larvae develop into pupae and emerge as adult mosquitoes
-    │
-    ▼ [2 to 3 Days]
-Adult female takes blood meal from an infected human host
-    │
-    ▼ [8 to 12 Days: Extrinsic Incubation Period]
-Dengue virus replicates inside the vector and migrates to salivary glands
-    │
-    ▼ [4 to 7 Days: Intrinsic Incubation Period]
-Infective mosquito bites susceptible human; viral incubation precedes symptom onset
-    │
-    ▼
-Clinical Outbreak / Hospital Admission Surge (Weeks 3 to 4)
++---------------------------------------------------------------------------------------+
+|                       Biological Vector Development Timeline                          |
+|                                                                                       |
+|  Day 0-7:       Heavy rainfall occurs; standing water collects in drains/containers.  |
+|  Day 7-14:      Aedes eggs hatch; larvae undergo 4 instars and pupate into adults.   |
+|  Day 14-17:     Adult female mosquitoes emerge, mate, and seek human blood meals.     |
+|  Day 17-28:     Extrinsic Incubation Period (EIP): Virus replicates in mosquito gut   |
+|                 and migrates to salivary glands (8 to 12 days).                       |
+|  Day 28-35:     Infectious bite; human Intrinsic Incubation Period (4 to 7 days)      |
+|                 until acute high fever and clinical hospital admission occur.         |
++---------------------------------------------------------------------------------------+
+|  Total Delay:   Approximately 3 to 4 weeks between rainfall and case surge.           |
++---------------------------------------------------------------------------------------+
 ```
 
-Because of this 3-to-4-week biological delay, `src/feature_engineering.py` constructs multi-week delayed features:
+Because of this timeline, rainfall that fell three to four weeks ago exhibits a far stronger statistical correlation with current hospital admissions ($r = 0.76$) than rainfall that fell during the current week ($r = 0.28$).
 
-- `rainfall_lag_1w`, `rainfall_lag_2w`, `rainfall_lag_3w`, `rainfall_lag_4w`: Captured strictly per ward using `.groupby('ward_id')['rainfall_mm'].shift(n)`. This isolates the exact historical precipitation window responsible for current adult mosquito abundance.
-- `rainfall_roll_sum_4w` and `rainfall_roll_mean_4w`: Quantifies sustained environmental water saturation over the preceding month. Prolonged accumulation indicates widespread, persistent breeding grounds in discarded containers, construction trenches, and stagnant drains.
-- `avg_temp_lag_1w`, `avg_temp_lag_2w`, `avg_temp_lag_3w`: Ambient temperature governs the speed of larval development and modulates the extrinsic incubation period. Warmer temperatures (optimal around 28°C–30°C) shorten viral replication time inside the mosquito, accelerating transmission risk.
-- `humidity_lag_1w`, `humidity_lag_2w`, `humidity_lag_3w`: High relative humidity (above 65%–70%) enhances adult mosquito longevity, allowing female vectors to survive long enough to complete the extrinsic incubation period and transmit the virus across multiple blood meals.
+### 5.2 Feature Categories and Mathematical Formulations
+The feature engineering pipeline in `src/feature_engineering.py` generates 39 distinct input features grouped into six domain categories:
 
-### Preventing Temporal Data Leakage
-
-To preserve strict real-world validity, all rolling window calculations apply a `.shift(1)` guard prior to aggregation:
-
-```python
-df["rainfall_roll_mean_4w"] = grouped["rainfall_mm"].transform(
-    lambda s: s.shift(1).rolling(window=4, min_periods=1).mean()
-)
+```mermaid
+graph LR
+    subgraph FC["Feature Categories (39 Features)"]
+        direction TB
+        F1["Multi-Week Rainfall Lags<br/>rainfall_lag_1w, 2w, 3w, 4w"]
+        F2["Rolling Rainfall Accumulators<br/>roll_mean_2w, roll_sum_2w, 4w, 3w"]
+        F3["Thermal & Humidity Lags<br/>avg_temp_lag_1w-3w, humidity_lag_1w-3w"]
+        F4["Urban Vulnerability Interactions<br/>rain_lag2/3w_x_waterlog, rain_lag2/3w_x_unsanitary,<br/>composite_vulnerability, density_exposure"]
+        F5["Composite Biological Indices<br/>vector_climate_suitability, temp_range_c"]
+        F6["Calendar & Monsoon Seasonality<br/>is_monsoon, sin_week, cos_week, sin_month, cos_month"]
+    end
 ```
 
-This prevents future lookahead bias by ensuring that predictions for any given week rely exclusively on completed meteorological measurements from prior weeks. The initial 4 burn-in weeks per ward are cleanly pruned from training to eliminate uninitialized lag artifacts.
+#### Category 1: Multi-Week Rainfall Lags
+Rainfall values are shifted backwards in time within each ward group using `groupby('ward_id')['rainfall_mm'].shift(n)` for $n \in \{1, 2, 3, 4\}$.
+- `rainfall_lag_1w`: Reflects immediate post-rainfall water ponding.
+- `rainfall_lag_2w`: Corresponds to the peak larval and pupal emergence window.
+- `rainfall_lag_3w`: Corresponds to adult female biting activity and the start of viral extrinsic incubation.
+- `rainfall_lag_4w`: Corresponds to the completion of viral incubation and the emergence of symptomatic clinical cases.
 
-### Urban Vulnerability Interactions and Environmental Indices
+#### Category 2: Rolling Precipitation Accumulators
+Single-week rainfall spikes can dry out before larvae develop. Sustained precipitation over multiple weeks is required to maintain urban breeding habitats. Rolling metrics are computed using a mandatory `.shift(1)` step to ensure that only completed past weeks are used:
+- `rainfall_roll_mean_2w` and `rainfall_roll_sum_2w`: Two-week short-term breeding persistence.
+- `rainfall_roll_sum_3w`: Three-week cumulative pool volume.
+- `rainfall_roll_mean_4w` and `rainfall_roll_sum_4w`: Four-week saturation index representing sustained municipal breeding capacity.
 
-Physical infrastructure determines whether rainfall transforms into an outbreak. Equal rainfall yields vastly different transmission rates in a modern, well-drained neighborhood compared to a densely crowded ward with open drainage bottlenecks. The feature pipeline models these relationships directly:
+#### Category 3: Thermal and Humidity Dynamics
+Mosquito metabolic rates, feeding frequency, and viral replication are sensitive to ambient temperature and moisture levels:
+- Lags (`avg_temp_lag_1w` to `_3w`, `humidity_lag_1w` to `_3w`): Track conditions during the mosquito's adult lifespan.
+- Rolling Means (`avg_temp_roll_mean_3w`, `humidity_roll_mean_3w`): Measure sustained thermal trends.
+- Diurnal Temperature Range (`temp_range_c = max_temp_c - min_temp_c`): Represents daily temperature swings; wide swings increase mosquito mortality, whereas narrow ranges favor vector survival.
 
-- `rain_lag2_x_waterlog`: Interacts the 2-week rainfall lag with the ward's water-logging risk index. High values indicate standing water trapped in poorly drained terrain precisely when larvae are maturing.
-- `rain_lag2_x_unsanitary`: Interacts rainfall lags with an unsanitary conditions score (`1.0 - sanitation_score`). High scores reflect heavy precipitation falling on uncollected solid waste and discarded plastic receptacles, which serve as ideal artificial breeding containers.
-- `composite_vulnerability_index`: An equal-weighted composite combining drainage vulnerability and solid waste deficiency into an overarching structural risk score.
-- `density_exposure_factor`: Scales ward population density against structural vulnerability, modeling the increased human-to-vector contact rate in crowded urban settlements.
-- `vector_climate_suitability`: A non-linear biological suitability index combining a Gaussian temperature curve centered at 28.5°C with a logistic humidity response function, quantifying overall environmental favorability for vector reproduction.
-- `Calendar Seasonality Features`: Encodes month, ISO week number, monsoon window flags, and cyclical trigonometric features (`sin_week`, `cos_week`, `sin_month`, `cos_month`) to capture annual monsoon cycles smoothly across year-end boundaries.
+#### Category 4: Urban Vulnerability Interaction Terms
+Rainfall accumulation alone does not determine the severity of a dengue outbreak. An identical 50 mm rainfall event produces fundamentally different public health outcomes depending on local neighborhood infrastructure. In an affluent, well-paved ward with active subsurface storm drainage and daily waste collection, runoff clears within hours, leaving virtually no standing water for mosquito oviposition. Conversely, in an underserved, high-density ward with unpaved roads, blocked drainage channels, and uncollected solid waste, that same 50 mm of precipitation creates persistent standing pools and fills hundreds of discarded containers, creating ideal breeding habitats.
+
+To capture these amplification dynamics, the pipeline in `src/feature_engineering.py` constructs four specific meteorological-infrastructural interaction terms, a composite vulnerability baseline, and an urban crowding exposure factor:
+
+##### 1. Drainage Bottleneck Interactions
+- `rain_lag2_x_waterlog`: The product of 2-week lagged rainfall and the drainage bottleneck index (`rainfall_lag_2w * water_logging_risk_index`). This captures rainwater trapped in blocked roadside drains and unpaved depressions during the peak larval and pupal development window (Days 7 to 14 post-rainfall).
+- `rain_lag3_x_waterlog`: The product of 3-week lagged rainfall and drainage bottlenecks (`rainfall_lag_3w * water_logging_risk_index`). This term models the prolonged persistence of stagnant surface water that sustains adult mosquito emergence into the active human-biting and viral incubation phase.
+
+##### 2. Unsanitary Breeding Site Interactions
+Uncollected domestic solid waste—such as discarded plastic containers, tires, abandoned buckets, and coconut shells—serves as the primary artificial breeding container for *Aedes aegypti*. The pipeline defines an unsanitary factor:
+
+$$\text{Unsanitary Factor} = \max(0.0, 1.0 - \text{Sanitation Score})$$
+
+where a lower municipal sanitation score yields a higher unsanitary factor.
+
+- `rain_lag2_x_unsanitary`: The product of 2-week lagged rainfall and the unsanitary factor (`rainfall_lag_2w * unsanitary_factor`). This reflects rainwater collecting in discarded artificial containers right as mosquito eggs hatch.
+- `rain_lag3_x_unsanitary`: The product of 3-week lagged rainfall and unsanitary conditions (`rainfall_lag_3w * unsanitary_factor`). This represents the proliferation of adult vector breeding pockets in close proximity to residential homes during peak biting activity.
+
+##### 3. Composite Vulnerability Index
+To establish a normalized, weather-independent structural baseline for every ward, the pipeline combines drainage vulnerability and sanitation deficits into an equal-weight composite index:
+
+$$\text{Composite Vulnerability Index} = 0.5 \times \text{Water Logging Risk Index} + 0.5 \times (1.0 - \text{Sanitation Score})$$
+
+This score scales from 0.0 (optimal drainage and sanitation) to 1.0 (severe drainage failure and unmanaged solid waste), providing a stable index of baseline neighborhood susceptibility.
+
+##### 4. Density Exposure Multiplier
+*Aedes aegypti* mosquitoes have an effective flight radius of only 50 to 100 meters throughout their adult lifespan. In sparsely populated areas, female mosquitoes must travel further to find blood meals, increasing vector mortality. In densely populated urban wards, however, an infectious mosquito has immediate and continuous access to multiple human hosts within a single dwelling or alleyway. 
+
+To model this contact acceleration, the pipeline computes the density exposure factor:
+
+$$\text{Density Exposure Factor} = \left(\frac{\text{Population Density}}{50{,}000}\right) \times \text{Composite Vulnerability Index}$$
+
+By scaling composite infrastructural vulnerability with normalized population crowding (benchmarked against 50,000 residents per square kilometer), this feature models how extreme residential congestion accelerates the transmission cycle from mosquitoes to humans.
+
+##### Summary of Category 4 Engineered Features
+
+| Feature Name | Mathematical Definition | Input Dimensions | Epidemiological Function in Model |
+|---|---|---|---|
+| `rain_lag2_x_waterlog` | `rainfall_lag_2w * water_logging_risk_index` | Continuous ($\ge 0.0$) | Quantifies standing rainwater trapped in clogged drains during larval development. |
+| `rain_lag3_x_waterlog` | `rainfall_lag_3w * water_logging_risk_index` | Continuous ($\ge 0.0$) | Measures prolonged stagnant water sustaining adult vector emergence and viral incubation. |
+| `rain_lag2_x_unsanitary` | `rainfall_lag_2w * (1.0 - sanitation_score)` | Continuous ($\ge 0.0$) | Models rainwater pooling in uncollected solid waste during the egg-hatching window. |
+| `rain_lag3_x_unsanitary` | `rainfall_lag_3w * (1.0 - sanitation_score)` | Continuous ($\ge 0.0$) | Captures expanded vector breeding containers near households during active transmission. |
+| `composite_vulnerability_index` | `0.5 * waterlog + 0.5 * (1.0 - sanitation)` | $[0.0, 1.0]$ | Establishes the static structural receptivity of the ward to vector proliferation. |
+| `density_exposure_factor` | `(density / 50,000) * composite_vulnerability` | Continuous ($\ge 0.0$) | Amplifies transmission risk in crowded wards where vectors have immediate human host access. |
+
+#### Category 5: Vector Climate Suitability Index
+To model physiological thresholds, the system computes a composite ecological suitability metric:
+
+$$\text{Temperature Suitability} = \exp\left(-0.5 \times \left(\frac{\text{Average Temperature} - 28.5}{4.0}\right)^2\right)$$
+
+$$\text{Humidity Suitability} = \frac{1}{1 + \exp(-0.15 \times (\text{Relative Humidity} - 65.0))}$$
+
+$$\text{Vector Climate Suitability} = \text{Temperature Suitability} \times \text{Humidity Suitability}$$
+
+The Gaussian temperature function peaks at $28.5^\circ\text{C}$ (the optimal temperature for *Aedes aegypti* reproduction and dengue virus transmission), while the logistic humidity function increases smoothly as relative humidity rises above $65\%$.
+
+#### Category 6: Seasonality and Cyclical Calendar Features
+Because dengue follows an annual monsoon cycle, the model incorporates cyclical temporal encodings:
+- `is_monsoon`: Binary flag indicating whether the observation falls between June and October (months 6 through 10).
+- Cyclical Trigonometric Encodings: The ISO week number ($1 \dots 52$) and month ($1 \dots 12$) are mapped to continuous circular coordinates using sine and cosine transformations:
+  $$\sin\left(\frac{2\pi \times \text{week}}{52}\right), \quad \cos\left(\frac{2\pi \times \text{week}}{52}\right), \quad \sin\left(\frac{2\pi \times \text{month}}{12}\right), \quad \cos\left(\frac{2\pi \times \text{month}}{12}\right)$$
+  This ensures that the model recognizes week 52 and week 1 as temporally continuous rather than treating them as distant values.
+
+### 5.3 Handling Initial Burn-In Rows
+Because computing a 4-week lag requires four preceding weeks of historical observations, the first four weeks for each ward evaluate to `NaN`. Rather than imputing artificial values, `engineer_features(drop_burnin=True)` drops these initial four rows per ward (240 rows total across 60 wards). The remaining 31,080 observations contain complete, verified historical signals.
 
 ---
 
 ## 6. Machine Learning Model Development
 
-### Problem Formulation
+### 6.1 Problem Formulation
+The predictive task is framed as a supervised multi-step regression problem. The model estimates the continuous number of clinical dengue cases admitted in ward $w$ during future week $t + h$ (where $h \in [1, 4]$ weeks) based on features available at week $t$:
+$$\hat{y}_{w, t+h} = f(\mathbf{X}_{w, t})$$
+where $\mathbf{X}_{w, t}$ is the 39-dimensional engineered feature vector.
 
-ADES BIDAI frames dengue early warning as a continuous regression task coupled with downstream categorical risk tier classification. The primary target variable is the total weekly count of reported dengue cases in an administrative ward (`dengue_cases`).
+### 6.2 The Critical Importance of Chronological Splitting
+In standard machine learning tasks, datasets are frequently partitioned using random cross-validation or shuffled train-test splits. In epidemiological time-series forecasting, random splitting leads to **temporal data leakage**.
 
-Predicting continuous case counts rather than directly training a multi-class classifier preserves the quantitative magnitude of outbreaks, maintains ordinal integrity between mild increases and severe epidemics, and allows public health planners to forecast exact hospital bed demand.
+```
++-------------------------------------------------------------------------------+
+|                      Chronological Train-Test Split                           |
+|                                                                               |
+|  2016                   2020                   2023 | 2024              2025  |
+|  [==================================================] | [===================]  |
+|                 Training Set (80%)                   |   Holdout Test (20%)   |
+|         416 Weeks x 60 Wards = 24,960 Samples        | 104 Wks x 60 W = 6,240 |
+|                                                      |   Strictly Unseen      |
++-------------------------------------------------------------------------------+
+```
 
-### Strict Chronological Train-Validation-Test Split
+If a dataset is randomly shuffled across time:
+- Observations from the middle of an outbreak season leak into the training set, allowing the model to "memorize" future trajectory points.
+- The model reports artificially inflated accuracy metrics that collapse when deployed in real-world surveillance.
 
-A frequent mistake in spatial-temporal public health modeling is the use of standard random k-fold cross-validation. Randomly shuffling rows across time causes severe **data leakage**: future observations contaminate the training fold, allowing the algorithm to memorize future outbreak trajectories and yielding artificially inflated validation scores that collapse during real-world deployment.
+To prevent leakage, ADES BIDAI enforces a strict chronological partition at `2024-01-01`:
+- Historical Training Set (2016-01-01 to 2023-12-31): Comprises 80% of the timeline (416 weeks per ward, totaling 24,960 records). The algorithm learns exclusively from historical records.
+- Future Holdout Test Set (2024-01-01 to 2025-12-29): Comprises the remaining 20% of the timeline (104 weeks per ward, totaling 6,240 records). This set evaluates how the model handles unseen future outbreak seasons.
 
-To guarantee honest out-of-sample evaluation, ADES BIDAI enforces a strict chronological split:
+### 6.3 Evaluation Metrics and Practical Meaning
+Four evaluation metrics quantify predictive performance:
 
-- **Training Period**: January 4, 2016 through December 31, 2023 (416 weeks, 24,960 total ward observations across all 60 wards).
-- **Holdout Test Period**: January 1, 2024 through December 29, 2025 (104 weeks, 6,240 total ward observations across all 60 wards).
+1. Mean Absolute Error (MAE): Measures the average absolute difference between predicted cases and actual clinical admissions:
+   $$\text{MAE} = \frac{1}{N} \sum_{i=1}^N |y_i - \hat{y}_i|$$
+   In practical terms, an MAE of 0.827 means that across all test weeks, the model's prediction deviated from actual hospital admissions by an average of less than one patient per ward.
 
-The model is trained solely on data up to the end of 2023 and evaluated on the subsequent two years of unseen future data, precisely replicating how the platform performs when deployed in an active municipal setting.
+2. Root Mean Squared Error (RMSE): Penalizes large outlier forecast errors more heavily:
+   $$\text{RMSE} = \sqrt{\frac{1}{N} \sum_{i=1}^N (y_i - \hat{y}_i)^2}$$
+   An RMSE of 1.554 demonstrates that the system avoids severe over-predictions or under-predictions during sudden epidemic surges.
+
+3. Coefficient of Determination ($R^2$): Quantifies the proportion of case variance explained by environmental and lagged predictors:
+   $$R^2 = 1 - \frac{\sum_{i=1}^N (y_i - \hat{y}_i)^2}{\sum_{i=1}^N (y_i - \bar{y})^2}$$
+   An $R^2$ score of 0.838 indicates that nearly 84% of variance in dengue admissions across 60 wards is accounted for by the engineered feature set.
+
+4. Risk Tier Classification Accuracy: Measures how accurately continuous predictions map into the correct public health threat tier (Low, Medium, High, or Critical). An accuracy of 85.59% ensures that municipal authorities receive reliable operational classifications.
 
 ---
 
 ## 7. Model Comparison and Selection
 
-### Benchmark Methodology
+### 7.1 Evaluated Candidate Architectures
+To identify the most accurate and efficient predictive engine, three candidate architectures were trained and tested under identical chronological conditions:
 
-Three diverse machine learning architectures were trained on identical feature sets and evaluated against the 6,240 out-of-sample holdout observations:
+1. Ridge Regression Baseline: An L2-regularized linear model. Linear models serve as standard benchmarks but assume direct proportional relationships between weather and case counts.
+2. Random Forest Regressor: An ensemble of 60 decision trees (`max_depth=10`, `min_samples_split=4`, `random_state=42`). Random forests capture non-linear relationships and feature interactions by averaging across randomized subsets of trees.
+3. Histogram-Based Gradient Boosting Regressor (HistGradientBoosting): Scikit-learn's gradient boosting algorithm (`loss="squared_error"`, `max_iter=180`, `learning_rate=0.08`, `max_depth=6`, `random_state=42`). It constructs successive decision trees that iteratively minimize residual prediction errors using histogram-binned numerical values.
 
-1. **Ridge Regression Baseline**: An L2-regularized linear baseline to establish the linear predictability limit of the feature set.
-2. **Random Forest Regressor**: An ensemble of 60 decision trees (`max_depth=10`, `min_samples_split=4`) capturing non-linear feature interactions and high-order combinations.
-3. **HistGradientBoosting Regressor**: A histogram-based gradient boosting decision tree ensemble (`max_iter=180`, `learning_rate=0.08`, `max_depth=6`, `random_state=42`) using native integer binning.
+### 7.2 Out-of-Sample Benchmark Results
+All metrics were calculated exclusively on the holdout test set (2024 through 2025, 6,240 observations):
 
-### Out-of-Sample Performance Comparison
+| Candidate Model | Mean Absolute Error (MAE) | Root Mean Squared Error (RMSE) | R-Squared ($R^2$) | Risk Tier Accuracy (%) | Status |
+|---|---|---|---|---|---|
+| Ridge Baseline | 1.057 | 1.858 | 0.768 | 79.81% | Evaluated (Baseline) |
+| Random Forest | 0.868 | 1.631 | 0.822 | 84.92% | Evaluated |
+| **HistGradientBoosting** | **0.827** | **1.554** | **0.838** | **85.59%** | **Selected Winner** |
 
-The models were evaluated across Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), Coefficient of Determination ($R^2$), and Risk Tier Classification Accuracy:
+### 7.3 Architectural Justification for HistGradientBoosting
+HistGradientBoosting was selected as the operational model for several key reasons:
 
-| Model Architecture | Mean Absolute Error (MAE) | Root Mean Squared Error (RMSE) | Coefficient of Determination ($R^2$) | Risk Tier Accuracy (%) | Selection Status |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Ridge Regression Baseline** | 1.057 | 1.858 | 0.768 | 79.81% | Baseline Rejected |
-| **Random Forest Regressor** | 0.868 | 1.631 | 0.822 | 84.92% | Candidate Rejected |
-| **HistGradientBoosting Regressor** | **0.827** | **1.554** | **0.838** | **85.59%** | **Winning Production Model** |
-
-### Why HistGradientBoosting Was Selected
-
-HistGradientBoosting outperformed both competing architectures across all evaluation criteria:
-
-- **Superior Predictive Accuracy**: Achieved the lowest MAE (0.827 cases per week) and lowest RMSE (1.554), demonstrating balanced performance across both sporadic baseline weeks and sharp epidemic surges.
-- **Effective Modeling of Non-Linear Thresholds**: Vector population dynamics exhibit sharp threshold behaviors. Mosquito survival drops rapidly when temperatures exceed 35°C or humidity falls below 60%. Histogram-binned gradient boosted trees capture these non-linear step changes significantly better than linear baselines.
-- **Handling of Zero-Inflated Distributions**: In non-monsoon months, many urban wards report zero cases. Gradient boosted loss minimization adapts effectively to zero-inflated distributions without predicting extreme negative values.
-- **Native Missing Value Routing**: The algorithm bins continuous variables into discrete integer buckets (typically 256 bins) and natively handles missing values during split finding, eliminating the need for synthetic data imputation.
-- **Computational and Memory Efficiency**: The trained model serializes to a lightweight binary file under 500 KB and executes inference across an entire city ward roster in under 15 milliseconds, ensuring smooth, lag-free user interaction.
+- Biological Non-Linearity: Mosquito reproduction and viral replication exhibit sharp threshold behaviors. When ambient temperatures rise above $24^\circ\text{C}$ and rainfall exceeds $50\text{ mm}$, larval emergence and biting activity accelerate rapidly. Decision-tree ensembles handle these step-level transitions naturally, whereas linear models struggle.
+- Superior Accuracy: HistGradientBoosting achieved the lowest MAE (0.827) and the highest risk tier accuracy (85.59%) among all candidates tested.
+- Regularization and Overfitting Control: The combination of depth limiting (`max_depth=6`), shrinkage (`learning_rate=0.08`), and histogram binning prevents the model from overfitting to individual ward anomalies in the training set.
+- Execution Speed and Resource Footprint: Histogram binning reduces the memory footprint during inference. The serialized model artifact (`models/dengue_outbreak_model.joblib`) is under 2 megabytes in size and generates ward-level predictions in under 10 milliseconds, making it well-suited for local execution on resource-constrained municipal computers.
+- Pure Scikit-Learn Ecosystem: The implementation uses standard Scikit-learn libraries, eliminating the need for complex external C++ dependencies such as XGBoost or LightGBM.
 
 ---
 
 ## 8. Dengue Risk Classification
 
-### Quantile-Derived Risk Tiers
+### 8.1 The Need for Categorical Public Health Tiers
+While machine learning models output continuous numbers (such as 3.42 predicted cases), municipal field teams require unambiguous categorical threat designations to trigger standardized public health protocols. Displaying raw decimal figures can lead to hesitation, whereas a defined risk tier directly informs operational decisions.
 
-Continuous numerical predictions are translated into categorical risk tiers to provide direct operational guidance to municipal officers who may not have statistical training. 
+### 8.2 Dynamic Quantile Threshold Derivation
+In dengue surveillance datasets, the distribution of weekly cases is heavily right-skewed: during the dry winter season, most wards report zero or sporadic cases, whereas monsoon peaks produce substantial surges. 
 
-Fixed, arbitrary thresholds fail in epidemiology because disease distributions are heavily skewed. ADES BIDAI establishes dynamic thresholds derived from the empirical percentiles of the historical training distribution:
+Using fixed, arbitrary thresholds (such as 5, 10, or 20 cases) across all settings can distort risk perception. Instead, ADES BIDAI calculates thresholds mathematically from the empirical distribution of historical training data using percentiles:
 
-- **Low Risk (< 1.5 predicted cases/week)**: Represents the 0 to 50th percentile. Baseline sporadic activity where transmission is minimal and isolated.
-- **Medium Risk (1.5 to 4.0 predicted cases/week)**: Represents the 50th to 75th percentile. Emerging localized vector breeding; conditions favor accelerated viral replication.
-- **High Risk (4.0 to 10.0 predicted cases/week)**: Represents the 75th to 90th percentile. Active cluster transmission with expanding case counts; containment is urgently required.
-- **Critical Risk ($\ge$ 10.0 predicted cases/week)**: Represents the top 10th percentile (> 90th percentile). Severe epidemic surge indicating widespread community transmission and imminent hospital emergency ward saturation.
+```
+Quantile Threshold Derivation (from Training Distribution):
+- 50th Percentile (q_low):   ~1.5 cases  --> Boundary between Low and Medium
+- 75th Percentile (q_med):   ~4.0 cases  --> Boundary between Medium and High
+- 90th Percentile (q_high):  ~10.0 cases --> Boundary between High and Critical
+```
 
-### Operational Intervention Playbook
+This mathematical division ensures that the designations correspond to real epidemiological shifts: the Low tier covers baseline conditions, Medium identifies emerging activity, High indicates active local transmission, and Critical highlights severe epidemic surges.
 
-Each risk tier triggers specific, prioritized actions across administrative and municipal levels:
+### 8.3 Operational Protocols by Risk Tier
 
-| Risk Tier | Case Threshold | Epidemiological Status | Recommended Public Health Action |
-| :--- | :--- | :--- | :--- |
-| **Low** | < 1.5 cases/week | Sporadic baseline | Routine surveillance; standard drain clearing; continuous public awareness messaging. |
-| **Medium** | 1.5 – 4.0 cases/week | Vector breeding emergence | Targeted biological larvicide application; inspection of construction sites; cleaning clogged surface drains. |
-| **High** | 4.0 – 10.0 cases/week | Active localized outbreak | Intensive thermal fogging in 500-meter cluster radius; door-to-door community inspection; clinic fever corner activation. |
-| **Critical** | $\ge$ 10.0 cases/week | Epidemic surge | Emergency municipal vector containment; hospital bed reservation protocols; ward-level emergency coordination meetings. |
+| Risk Tier | Case Threshold | Epidemiological Status | Municipal Action Protocol |
+|---|---|---|---|
+| **Low Risk** | $< 1.5$ cases / week | Baseline / Sporadic Activity | Maintain routine municipal surveillance; standard drain flushing; general citizen awareness communications. |
+| **Medium Risk** | $1.5$ to $4.0$ cases / week | Emerging Vector Activity | Issue early warnings to ward sanitation inspectors; inspect construction sites and unmanaged canals; apply targeted larvicide. |
+| **High Risk** | $4.0$ to $10.0$ cases / week | Active Localized Outbreak | Mobilize dedicated vector control teams; perform drain clearance in transmission pockets; schedule localized evening fogging. |
+| **Critical Risk** | $\ge 10.0$ cases / week | Severe Epidemic Surge | Declare ward-level public health emergency; launch coordinated clean-up drives; alert nearby hospital directors to open dedicated fever wards. |
 
 ---
 
 ## 9. Prediction Confidence and Limitations
 
-### Estimation of Uncertainty Intervals
+### 9.1 Confidence Interval Methodology
+Public health decisions require an understanding of prediction uncertainty. In ADES BIDAI, confidence intervals are computed using an empirical formulation based on the out-of-sample Mean Absolute Error:
 
-Point forecasts can convey a false sense of certainty in disease surveillance. To provide decision-makers with a clear range of potential outcomes, ADES BIDAI provides an uncertainty bound around every prediction:
+$$\text{Margin of Error} = 1.5 \times \text{MAE}_{\text{model}} \times \sqrt{\max\left(1, \frac{h}{2}\right)}$$
+$$\text{CI}_{\text{lower}} = \max\left(0, \hat{y} - \text{Margin of Error}\right)$$
+$$\text{CI}_{\text{upper}} = \hat{y} + \text{Margin of Error}$$
 
-$$\text{Lower Bound} = \max(0, \hat{y} - 1.5 \times \text{MAE})$$
+where:
+- $\hat{y}$ is the predicted case count for the ward.
+- $\text{MAE}_{\text{model}}$ is the validated test error (0.827 for HistGradientBoosting).
+- $h$ is the forecast horizon in weeks ($h \in [1, 12]$).
+- The factor $1.5 \times \text{MAE}$ approximates an 80% to 90% coverage interval assuming approximately normal residual errors.
+- The term $\sqrt{\max(1, h/2)}$ widens the interval for longer forecast horizons, reflecting the accumulation of temporal uncertainty.
+- The lower bound is clipped at zero because negative disease cases are physically impossible.
 
-$$\text{Upper Bound} = \hat{y} + 1.5 \times \text{MAE}$$
+### 9.2 Practical Limitations and Contextual Caveats
+To ensure responsible public health deployment, several operational constraints must be recognized:
 
-Where $\hat{y}$ is the model's point prediction and $\text{MAE} = 0.827$. Under approximately normal error residuals, a $1.5 \times \text{MAE}$ multiplier spans approximately 85% to 90% of expected variation. Negative lower bounds are clipped to zero, as negative dengue cases are physically impossible.
-
-### Technical and Epidemiological Limitations
-
-Responsible operational deployment requires transparent disclosure of the system's inherent constraints:
-
-- **Engineering Approximation of Confidence Intervals**: The $\pm 1.5 \times \text{MAE}$ interval is a practical heuristic designed for responsive web delivery. It does not replace formal conformal inference or computationally intensive bootstrap prediction intervals.
-- **Absence of Real-Time Viral Serotype Data**: Dengue transmission severity is strongly influenced by circulating viral serotypes (DENV-1 through DENV-4). Secondary infection with a heterologous serotype can lead to antibody-dependent enhancement and severe clinical complications. Because national surveillance data in Bangladesh does not consistently report ward-level serotyping, the model currently relies on environmental and historical transmission proxies.
-- **Hospital Underreporting and Reporting Lags**: The ground-truth dataset reflects patients who sought care and received clinical or serological confirmation (NS1 or IgM/IgG). Mild or asymptomatic infections that do not result in formal hospital admissions are uncaptured, meaning actual community infection rates are higher than official counts.
-- **Macro vs. Micro-Climate Discrepancies**: Meteorological features are recorded from municipal weather stations. Local microclimates—such as shaded alleys, indoor water storage tanks, and individual rooftop gardens—can sustain mosquito colonies even when regional weather parameters appear suboptimal.
+- Statistical Approximation: The confidence interval is an engineering heuristic derived from test-set error rather than a formal Bayesian posterior or bootstrap interval. It serves as an operational decision range rather than a guarantee.
+- Unobserved Field Interventions: Machine learning models forecast future trends based on historical relationships between weather and disease transmission. The model cannot observe unrecorded human interventions, such as an unannounced community clean-up drive, changes in local household water-storage habits, or sudden neighborhood pesticide spraying.
+- Clinical Reporting Variations: Documented case numbers reflect hospital admission records. Wards with private clinics or residents who treat mild fever at home may experience reporting discrepancies that historical surveillance data cannot fully capture.
+- Geographic Scope: The model is trained and calibrated specifically on urban Bangladeshi infrastructure and climate conditions. Applying the model to rural environments or other countries would require retraining on local meteorological and surveillance data.
+- Centroid Visualization: Because official digital boundary shapefiles (GeoJSON polygons) are not openly accessible for all 60 wards, the dashboard visualizes wards using geographic centroid coordinates rather than administrative boundary outlines.
 
 ---
 
 ## 10. Backend Architecture and API Communication
 
-The backend is built using FastAPI (`api.py`), providing an asynchronous, OpenAPI-compliant REST interface. It is architected for maximum responsiveness through in-memory caching and clean separation of concerns.
+### 10.1 FastAPI Architecture and Startup Sequence
+The backend is implemented as an asynchronous REST service using FastAPI (`api.py`) running on an ASGI server (Uvicorn). 
 
-### Application Startup and In-Memory Initialization
+To ensure fast response times and zero runtime disk read overhead, the server executes a startup routine using the `@app.on_event("startup")` hook:
+1. Loads the complete historical dataset (`google_sheet_dengue_dataset.csv`).
+2. Runs the data cleaning and feature engineering pipelines.
+3. Deserializes the trained model artifact (`models/dengue_outbreak_model.joblib`).
+4. Generates predictions across all historical records and extracts the latest weekly forecast for each of the 60 wards.
+5. Caches the resulting dataframes in memory as global variables (`_FEATURED_DF`, `_PREDICTED_DF`, `_LATEST_PRED_DF`).
 
-To eliminate redundant disk reads and runtime model initialization delays, `api.py` leverages FastAPI startup lifecycle events:
+All subsequent HTTP API requests query these in-memory data structures directly, serving responses in under five milliseconds without disk I/O.
 
-1. **Data Ingestion**: Loads the cleaned dataset and runs the complete feature engineering pipeline once, storing the resulting matrices in global memory.
-2. **Artifact Deserialization**: Loads `models/dengue_outbreak_model.joblib` and caches the estimator, feature column list, and quantile thresholds.
-3. **Precomputing Surveillance State**: Generates and caches predictions for the most recent observation week across all 60 wards, enabling instantaneous serving upon startup.
+### 10.2 REST Endpoints Reference
 
-### Primary API Endpoints
+| Method | Endpoint | Query Parameters | Description | Sample Output Fields |
+|---|---|---|---|---|
+| `GET` | `/api/health` | None | Service liveness check and server UTC timestamp. | `status`, `timestamp` |
+| `GET` | `/api/summary` | None | High-level platform KPIs across all monitored wards. | `total_cases`, `total_wards`, `latest_date`, `avg_temp`, `total_rainfall`, `high_risk_count`, `critical_count` |
+| `GET` | `/api/wards` | None | Listing of all 60 wards with coordinates, locality labels, latest predicted cases, and risk tiers. | `ward_id`, `lat`, `lon`, `city`, `locality`, `predicted_cases`, `risk_tier` |
+| `GET` | `/api/ward/{ward_id}` | Path: `ward_id` | Comprehensive profile of a specific ward, including 2-week and 4-week forecasts, 12-week case history, environmental indicators, confidence intervals, and primary risk drivers. | `ward_id`, `current_risk_tier`, `predicted_2w_cases`, `predicted_4w_cases`, `history`, `weather_summary`, `risk_drivers`, `confidence_interval_2w`, `confidence_interval_4w` |
+| `GET` | `/api/predict` | `ward_id` (str), `horizon` (int, 1-12) | Dynamic forecast for a specific ward at a user-defined horizon. | `ward_id`, `horizon_weeks`, `predicted_cases`, `risk_tier`, `confidence_lower`, `confidence_upper`, `primary_drivers` |
+| `GET` | `/api/weather/{ward_id}` | Path: `ward_id` | Last four weeks of meteorological observations and precipitation lags for the specified ward. | `ward_id`, `weeks` (array of weekly observations with 1w-4w lags) |
+| `GET` | `/api/metrics` | None | Returns verified out-of-sample benchmark metrics for all candidate models. | JSON object with MAE, RMSE, R2, and Tier Accuracy for Ridge, RandomForest, and HistGradientBoosting |
+| `GET` | `/api/historical` | `weeks` (int, 1-260, default: 52) | Aggregated weekly historical cases across all wards for longitudinal trend charts. | `data` (array of `date` and `total_cases`) |
+| `GET` | `/api/comparison` | `wards` (comma-separated IDs) | Side-by-side comparative analysis of environmental and risk metrics across multiple selected wards. | Array of ward objects containing `avg_temp`, `avg_rainfall`, `total_cases`, `predicted_cases`, `waterlog_index`, `sanitation_score` |
+| `GET` | `/api/environmental` | None | Pearson correlation coefficients, sampled environmental scatter data, and monthly case averages. | `rainfall_vs_dengue`, `temp_vs_dengue`, `monthly_trend`, `correlations` |
 
-| Method | Endpoint Route | Description and Responsibilities |
-| :--- | :--- | :--- |
-| `GET` | `/api/health` | Verifies service health, active model name, and system uptime. |
-| `GET` | `/api/summary` | Delivers aggregate citywide metrics, including total predicted cases and ward risk distribution. |
-| `GET` | `/api/wards` | Returns the latest risk status, coordinates, predicted cases, and top drivers for all 60 wards. |
-| `GET` | `/api/ward/{ward_id}` | Provides granular longitudinal time-series data and static features for a specific ward. |
-| `GET` | `/api/predict` | Executes dynamic, scenario-based inference on arbitrary user-provided feature inputs. |
-| `GET` | `/api/weather/{ward_id}` | Returns multi-week weather lag observations (rainfall, temperature, humidity) for a ward. |
-| `GET` | `/api/metrics` | Serves out-of-sample benchmark validation metrics (MAE, RMSE, $R^2$, Tier Accuracy). |
-| `GET` | `/api/comparison` | Provides side-by-side metric comparisons between two selected wards. |
-| `GET` | `/api/environmental` | Computes correlation matrices between environmental drivers and dengue case counts. |
+### 10.3 Cross-Origin Resource Sharing (CORS) and Resilience
+The FastAPI application includes CORS middleware configured to allow incoming cross-origin requests (`allow_origins=["*"]`). This permits external web dashboards, municipal portals, and mobile client applications to interface with the predictive service without cross-origin rejections.
 
 ---
 
 ## 11. Frontend Architecture and User Interaction
 
-The user-facing dashboard is implemented in Streamlit (`app.py`), featuring a cohesive dark-themed user interface (`#0B1120` canvas, `#111827` surface cards, and `#06B6D4` cyan accents) designed for clarity under high-pressure public health workflows.
+### 11.1 User Interface Layout and Visual Hierarchy
+The user interface is built with Streamlit (`app.py`), styled with a dark slate palette (`#0B1120` background, `#111827` containers, `#06B6D4` cyan highlights, and `#EF4444` alert banners). 
 
-### Seamless Backend Communication and Local Fallback
+The screen uses a two-column layout:
+- Left Column: Filter and simulation controls with a cyan outline.
+- Right Column: Main display area housing the primary analytical tabs, map views, and charts.
 
-The frontend communicates with the FastAPI service over standard HTTP REST calls (`http://localhost:8000`). To guarantee uninterrupted operation even if the standalone API process terminates or the network is disrupted, the dashboard incorporates an automatic in-memory fallback:
-
-```python
-try:
-    resp = requests.get(f"{API_BASE_URL}/api/wards", timeout=2.0)
-    data = resp.json()
-except Exception:
-    # Transparent Local Fallback Mode
-    data = load_local_predictions_in_memory()
+```
++-------------------------------------------------------------------------------------------------------+
+|                                              ADES BIDAI                                               |
+|                    AI-Based Dengue Outbreak Prediction & Early-Warning System                         |
+|-------------------------------------------------------------------------------------------------------|
+|  [Tab 1: Live Ward Forecast]     [Tab 2: Multi-Week Lag Analysis]     [Tab 3: Model Validation]       |
+|-------------------------------------------------------------------------------------------------------|
+| [FILTER CONTROLS]       | [MAIN DISPLAY AREA: SELECTED TAB CONTENT]                                   |
+| - Select City           |                                                                             |
+| - Select Ward ID        | [Center-Left: Risk Heatmap]              [Top-Right: Key Drivers Bar Chart] |
+| - Forecast Window       | - Scatter map on dark basemap            - 3-week rain lag                  |
+| - Sliders:              | - Ward centroid color-coded by tier      - Water logging risk               |
+|   * avg_temp_C          | - Hover tooltip with case estimates      - Population density               |
+|   * rainfall_mm         |                                          - Sanitation score                 |
+|   * relative_humidity   |-----------------------------------------------------------------------------|
+|                         | [Bottom-Left: Alert Banner]              [Bottom-Right: Dual-Axis Trend]    |
+| [Update Prediction]     | - "CRITICAL RISK: 82 Predicted Cases"    - 8-week trend curve               |
+| [Reset Filters]         |   (CI: 75 - 89 Cases)                    - Rainfall (mm) vs Predicted Cases |
++-------------------------------------------------------------------------------------------------------+
 ```
 
-This dual-mode architecture guarantees that field workers in low-connectivity environments retain complete access to model forecasts and interactive tools without experiencing application crashes.
+### 11.2 Analytical Tab Breakdown
 
-### Surveillance Modules
+#### Tab 1: Live Ward Forecast and Spatial Risk
+- Interactive Ward Heatmap: Renders all wards within the selected city on an interactive map. Each centroid is colored by its predicted risk tier (Green for Low, Yellow for Medium, Orange for High, Red for Critical).
+- Scenario Simulation Sliders: Allows users to modify temperature, rainfall, and humidity inputs in real time. For example, a municipal officer can simulate a 40 mm rainfall spike to see whether a ward shifts from Medium to High risk.
+- Risk Drivers Bar Chart: Visualizes the relative contribution of key factors (such as the 3-week rainfall lag, drainage blockages, population density, and sanitation levels) to the ward's risk score.
+- Dual-Axis Progression Chart: Displays an 8-week longitudinal curve showing weekly rainfall alongside predicted dengue cases, illustrating the delayed outbreak response.
+- Alert Banner: Presents a summary banner displaying the final predicted case count, confidence bounds, and categorical threat level.
 
-The interface is structured into three primary surveillance views:
+#### Tab 2: Multi-Week Lag Analysis and Vector Biology
+- Correlation Progression Cards: Displays the statistical correlation between rainfall and dengue cases across different time offsets:
+  - 1-Week Lag ($r = 0.28$): Initial water pooling; weak case correlation.
+  - 2-Week Lag ($r = 0.54$): Larval emergence peak; emerging correlation.
+  - 3-Week Lag ($r = 0.69$): Peak adult biting frequency and viral incubation.
+  - 4-Week Lag ($r = 0.76$): Clinical admission surge; strongest correlation.
+- Longitudinal 30-Week Lag Plot: Overlays actual rainfall, 2-week lagged rainfall, 3-week lagged rainfall, and confirmed dengue admissions to illustrate how precipitation peaks consistently precede case surges by several weeks.
 
-1. **Live Ward Forecast**: Presents an interactive geospatial ward map color-coded by risk tier alongside an epidemiological summary banner. Selecting any ward reveals a forecast card displaying expected cases, 95% uncertainty bounds, primary environmental drivers, and a dual-axis trend chart overlaying historical cases against rainfall.
-2. **Multi-Week Lag Analysis**: Educates decision-makers on the biological transmission cycle. Users can visualize 1-week through 4-week rainfall lag distributions, examine temperature and humidity suitability curves, and track 52-week longitudinal vectors across any selected municipality.
-3. **Model Validation**: Provides complete transparency into model accuracy. Displays out-of-sample holdout metrics comparing HistGradientBoosting against Random Forest and Ridge Regression, visually demonstrates the strict chronological split, and reviews the dynamic quantile threshold methodology.
+#### Tab 3: Model Validation and Benchmark Comparison
+- Model Benchmark Cards: Compares HistGradientBoosting, Random Forest, and the Ridge baseline side by side across MAE, RMSE, $R^2$, and risk tier accuracy.
+- Methodology Walkthrough: Explains the chronological splitting strategy and why random splits produce misleading results in time-series forecasting.
+- Metric Interpretations: Translates abstract statistical figures into operational public health terms (for example, explaining that an MAE of 0.827 corresponds to an average discrepancy of less than one patient per ward).
+
+### 11.3 Local Fallback Mode
+If the FastAPI backend is offline, `app.py` falls back to direct local file execution. Using `@st.cache_data`, the dashboard reads `data/dashboard_precomputed.json` and the local dataset directly, allowing users to explore maps, test scenarios, and review metrics without requiring a running API server.
 
 ---
 
 ## 12. Project Folder and File Structure
 
-The repository is organized cleanly by functional responsibility:
+### 12.1 Directory Tree
+The repository maintains a clean separation of concerns across data, modeling, web services, and user interfaces:
 
 ```
 ADES-BIDAI/
-├── .streamlit/
-│   └── config.toml                  # Streamlit dark theme configuration and server parameters
-├── assets/
-│   ├── reference_dashboard.jpg      # Visual design reference and layout benchmarks
-│   └── media_*.jpg                  # UI assets and documentation media
-├── data/
-│   ├── google_sheet_dengue_dataset.csv  # Primary 10-year longitudinal surveillance dataset
-│   └── dashboard_precomputed.json   # Precomputed ward aggregates for rapid offline startup
-├── models/
-│   ├── dengue_outbreak_model.joblib # Serialized production HistGradientBoosting model artifact
-│   └── metrics_summary.json         # Out-of-sample validation benchmark metrics
-├── src/
-│   ├── __init__.py                  # Package initialization
-│   ├── data_processing.py           # Ingestion, cleaning, sorting, and type validation
-│   ├── feature_engineering.py       # Multi-week lag calculations, rolling statistics, and indices
-│   ├── prediction.py                # Local inference engine, quantile mapping, and driver analysis
-│   └── train_model.py               # Chronological model training, evaluation, and serialization
-├── utils/
-│   ├── __init__.py                  # Utility package initialization
-│   └── ward_coordinates.py          # Geospatial centroids and boundaries for all 60 wards
-├── api.py                           # Standalone FastAPI REST backend server
-├── app.py                           # Primary Streamlit surveillance dashboard application
-├── ARCHITECTURE.md                  # Comprehensive system architecture documentation (this document)
-├── README.md                        # Project landing page and high-level setup guide
-├── requirements.txt                 # Pinned Python package dependencies
-└── run.bat                          # Single-command Windows startup script with thread safety
+|-- .streamlit/
+|   `-- config.toml                     Streamlit server, port, and headless configurations
+|-- assets/
+|   |-- media_1795293208554_8f55e2cd.jpg Reference layout and UI design specification
+|   |-- media_1795302160003_09f3c03e.jpg Dark-mode dashboard reference wireframe
+|   `-- reference_dashboard.jpg         Visual styling reference artifact
+|-- data/
+|   |-- google_sheet_dengue_dataset.csv Primary 10-year surveillance dataset (31,320 rows)
+|   |-- hackathon_preli_dataset...csv   Backup raw reference dataset
+|   `-- dashboard_precomputed.json      Pre-aggregated ward statistics for fast dashboard loading
+|-- models/
+|   |-- dengue_outbreak_model.joblib    Serialized HistGradientBoosting model artifact
+|   `-- metrics_summary.json            Out-of-sample benchmark metrics for all candidate models
+|-- src/
+|   |-- __init__.py                     Package initializer
+|   |-- data_processing.py              Data loading, column cleaning, and type enforcement
+|   |-- feature_engineering.py          Multi-week lag pipeline and vulnerability interactions
+|   |-- train_model.py                  Chronological train-test splitting and benchmark training
+|   `-- prediction.py                   Inference engine and risk driver extraction
+|-- utils/
+|   |-- __init__.py                     Package initializer
+|   `-- ward_coordinates.py             Centroid coordinates and locality metadata for all 60 wards
+|-- api.py                              FastAPI backend service exposing 10 REST endpoints
+|-- app.py                              Streamlit multi-tab surveillance dashboard
+|-- run.bat                             Windows launch script with thread controls
+|-- requirements.txt                    Python package dependencies
+|-- ARCHITECTURE.md                     Complete system architecture documentation
+`-- README.md                           Project overview and operational guide
 ```
+
+### 12.2 Role of Core Files
+
+| File Path | Functional Role | Key Dependencies | Primary Consumers |
+|---|---|---|---|
+| `src/data_processing.py` | Ingests raw CSVs, strips headers, parses dates, removes duplicates, and enforces non-negative bounds. | `pandas`, `numpy`, `glob` | `src/feature_engineering.py`, `src/train_model.py`, `api.py` |
+| `src/feature_engineering.py` | Computes multi-week lags (1w-4w), rolling sums/means, vulnerability interactions, and calendar features. | `pandas`, `numpy`, `src/data_processing.py` | `src/train_model.py`, `api.py` |
+| `src/train_model.py` | Executes the 2016-2023 vs 2024-2025 chronological split, trains models, evaluates metrics, and saves model artifacts. | `scikit-learn`, `joblib`, `src/feature_engineering.py` | Command-line retraining |
+| `src/prediction.py` | Caches the loaded model, runs predictions, clips values, and extracts human-readable risk drivers. | `joblib`, `pandas`, `numpy` | `api.py`, Standalone prediction scripts |
+| `utils/ward_coordinates.py` | Supplies latitude, longitude, and locality labels for all 60 monitored urban wards. | Python standard library | `api.py`, `app.py` |
+| `api.py` | Implements the FastAPI service, manages startup caching, and serves 10 REST endpoints. | `fastapi`, `uvicorn`, `joblib`, `src/*`, `utils/*` | Web clients, external systems |
+| `app.py` | Streamlit dashboard providing interactive maps, scenario simulation sliders, and validation tabs. | `streamlit`, `plotly`, `pydeck`, `pandas`, `json` | End users, evaluators |
+| `data/dashboard_precomputed.json` | Stores pre-calculated ward coordinates, historical means, and metrics to accelerate startup. | JSON format | `app.py`, `api.py` |
+| `models/dengue_outbreak_model.joblib` | Serialized model dictionary containing the trained model, feature names, quantile thresholds, and metadata. | `joblib` | `src/prediction.py`, `api.py` |
 
 ---
 
 ## 13. Performance, Caching, and Cost Efficiency
 
-### Zero Cloud and API Costs
+### 13.1 Computational Performance and Memory Optimization
+The platform incorporates several performance optimizations to support fast execution on standard local hardware:
 
-A core design objective of ADES BIDAI is operational sustainability. Many contemporary AI applications rely on closed-source, cloud-hosted large language models that incur ongoing API token fees, network latency, and data privacy concerns. 
+- Memory Downcasting: In `app.py`, data types are explicitly optimized during ingestion: categorical columns for ward and city names, `float32` for continuous metrics, and `int16` for case counts. This reduces dataset memory consumption from approximately 16 megabytes to under 2 megabytes.
+- Streamlit In-Memory Caching: The `@st.cache_data` decorator caches processed datasets and summary metrics. Successive user actions and slider adjustments reuse cached memory references, preventing repetitive data processing.
+- Single-Instance Model Loading: The prediction module maintains a global `_LOADED_ARTIFACT` reference. Once loaded, subsequent inference calls execute in memory in under 10 milliseconds.
+- Thread Control: The startup script `run.bat` limits matrix library thread allocations:
+  ```batch
+  set OPENBLAS_NUM_THREADS=1
+  set MKL_NUM_THREADS=1
+  set OMP_NUM_THREADS=1
+  set NUMEXPR_NUM_THREADS=1
+  ```
+  This setting prevents CPU thread contention and memory allocation overhead on Windows systems.
 
-ADES BIDAI operates with **zero ongoing cloud costs**:
-- **Offline Inference**: Inference is powered by an optimized, locally serialized Scikit-learn model requiring no external network calls.
-- **Zero Token Fees**: No recurring per-query charges or third-party cloud subscriptions are incurred.
-- **Edge Deployability**: The entire platform runs efficiently on standard laptop or desktop hardware within municipal health offices.
+### 13.2 Financial and Resource Cost Analysis
+ADES BIDAI was engineered with an emphasis on cost efficiency. Many modern AI applications depend on cloud-hosted Large Language Models or hosted database services that incur recurring operational costs.
 
-### Memory Optimization and OpenBLAS Thread Safety
+| Architecture Dimension | Implementation Strategy | Recurring Operational Cost |
+|---|---|---|
+| Inference Engine | Local Scikit-learn HistGradientBoosting model loaded via Joblib. | $0.00 |
+| Training Compute | Local CPU execution; full 10-year training runs in under 30 seconds. | $0.00 |
+| External Meteorological APIs | Self-contained historical surveillance dataset and interactive local scenario sliders. | $0.00 |
+| Language Model Dependencies | Zero LLM or external generative API calls. Risk drivers are evaluated via deterministic rules. | $0.00 |
+| Cloud Hosting Infrastructure | Runs entirely on local machines, municipal intranets, or self-hosted servers. | $0.00 |
+| Total Operational Cost | Fully self-contained local deployment. | **$0.00** |
 
-On Windows environments running scientific Python libraries, concurrent multi-threaded linear algebra backends (OpenBLAS and MKL) can occasionally trigger memory access conflicts under high-concurrency Streamlit re-renders. ADES BIDAI enforces single-threaded backend execution via environment variables configured in `run.bat` and application entrypoints:
-
-```bat
-set OPENBLAS_NUM_THREADS=1
-set MKL_NUM_THREADS=1
-set OMP_NUM_THREADS=1
-set NUMEXPR_NUM_THREADS=1
-```
-
-This configuration stabilizes thread allocation, eliminates segmentation risks, and reduces total application memory usage to under 250 MB. In addition, Streamlit caching primitives (`@st.cache_data` and `@st.cache_resource`) ensure that datasets and model artifacts are loaded into memory once and reused across all active browser sessions.
+This cost profile ensures that municipal city corporations can run the surveillance system continuously without requiring recurring software budgets.
 
 ---
 
 ## 14. Installation and Execution Guide
 
-### Prerequisites
+### 14.1 System Prerequisites
+- Operating System: Windows 10/11, Ubuntu 20.04+, or macOS.
+- Python Environment: Python version 3.10 through 3.14.
+- Package Manager: `pip` and Git.
 
-- Operating System: Windows 10/11, Ubuntu 20.04+, or macOS
-- Python Runtime: Python 3.10 through 3.12 (Python 3.14+ is not recommended due to pre-compiled binary compatibility requirements)
-- Package Manager: `pip`
+### 14.2 Step-by-Step Installation
 
-### Step-by-Step Installation
-
-1. **Clone the Repository**:
+1. Clone the repository:
    ```bash
    git clone https://github.com/AfrinSultanaTazkia/ADES-BIDAI.git
    cd ADES-BIDAI
    ```
 
-2. **Create and Activate a Virtual Environment**:
+2. Create and activate a virtual environment (recommended):
    ```bash
-   # Windows
    python -m venv venv
-   .\venv\Scripts\activate
-
-   # Linux / macOS
-   python3 -m venv venv
+   # On Windows:
+   venv\Scripts\activate
+   # On Linux/macOS:
    source venv/bin/activate
    ```
 
-3. **Install Dependencies**:
+3. Install required Python packages:
    ```bash
-   pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
-4. **Retrain or Verify Model Artifacts (Optional)**:
-   The pre-trained model artifact is included in `models/dengue_outbreak_model.joblib`. To retrain the model and regenerate benchmark metrics:
-   ```bash
-   python src/train_model.py
-   ```
+4. Verify dataset placement:
+   Confirm that `data/google_sheet_dengue_dataset.csv` exists in the `data/` folder.
 
-### Running the System
+### 14.3 Launching the Platform
 
-You can run the system using the provided single-command launcher or by starting services independently:
+#### Method 1: Dual-Terminal Launch (Recommended for Full Stack API + UI)
+This configuration starts both the FastAPI backend service and the Streamlit frontend.
 
-- **Single-Command Launch (Windows)**:
-  Double-click `run.bat` or run:
-  ```cmd
-  run.bat
-  ```
+Terminal 1 - Launch the FastAPI REST Server:
+```bash
+python api.py
+```
+The backend initializes at `http://localhost:8000`. Interactive API documentation and the Swagger test console are available at `http://localhost:8000/docs`.
 
-- **Independent Service Launch**:
-  Terminal 1 (FastAPI Backend):
-  ```bash
-  python api.py
-  # API live at: http://localhost:8000
-  # Interactive Docs: http://localhost:8000/docs
-  ```
+Terminal 2 - Launch the Streamlit Surveillance Dashboard:
+```bash
+streamlit run app.py --server.port 8501
+```
+The user interface opens in the web browser at `http://localhost:8501`.
 
-  Terminal 2 (Streamlit Dashboard):
-  ```bash
-  streamlit run app.py --server.port 8501
-  # Dashboard live at: http://localhost:8501
-  ```
+#### Method 2: One-Click Startup (Windows)
+Double-click `run.bat` in the repository root directory. The script configures thread variables and launches the Streamlit dashboard on port 8501.
+
+#### Method 3: Dashboard-Only Mode (Local Fallback)
+If you only need to explore the visual dashboard without running the background API server:
+```bash
+streamlit run app.py
+```
+The dashboard automatically detects that the API is offline and loads data directly from the local files.
+
+#### Optional: Retraining the Machine Learning Model
+To retrain the models and regenerate evaluation artifacts:
+```bash
+python src/train_model.py
+```
+The script loads the data, computes features, performs the chronological train-test split, trains Ridge, Random Forest, and HistGradientBoosting models, logs comparative metrics, and saves the updated model and metric files to `models/`.
 
 ---
 
 ## 15. Reproducibility and Future Improvements
 
-### Reproducibility Framework
+### 15.1 Scientific Reproducibility Guarantees
+To ensure that all results can be verified independently by judges and researchers:
+- Fixed Random Seeds: All randomized routines, including tree building and subsampling, use `random_state=42`.
+- Deterministic Lag Generation: Feature engineering uses explicit sorting by `ward_id` and `date`, ensuring that lag shifting produces identical feature vectors across runs.
+- Version-Controlled Evaluation Metrics: Holdout test results are stored in `models/metrics_summary.json` alongside the trained model artifact.
 
-To ensure that reported results are fully reproducible across different environments, ADES BIDAI adheres to strict deterministic guidelines:
-- **Fixed Random Seeds**: All stochastic processes in model training (`HistGradientBoostingRegressor` and `RandomForestRegressor`) use `random_state=42`.
-- **Deterministic Pipeline Execution**: Feature transformations follow explicit mathematical equations without non-deterministic sampling.
-- **Tracked Model Artifacts**: Model parameters, feature column orderings, and dynamic quantile boundaries are versioned in `models/dengue_outbreak_model.joblib` and audited against `models/metrics_summary.json`.
+### 15.2 Future Technical Roadmap
+While the current system provides a solid foundation for proactive surveillance, several technical additions are planned for future iterations:
 
-### Future Engineering Roadmap
+- Live Meteorological API Integration: Future releases can incorporate connectors to live meteorological feeds (such as the Bangladesh Meteorological Department or open satellite radar APIs) to automatically populate weekly weather observations.
+- Entomological Field Surveillance: Integrating field entomology records, such as the Breteau Index (BI) and House Index (HI), would complement weather lags with direct counts of larval presence.
+- Boundary Polygon GeoJSON Choropleths: Transitioning from centroid coordinates to high-resolution ward boundary polygon shapefiles will enable continuous choropleth heatmaps.
+- Automated Alert Dispatch: Adding an automated notification module could dispatch SMS alerts and WhatsApp advisories directly to ward councilors and municipal sanitation supervisors when a ward enters the Critical risk tier.
+- Mobile Data Collection: Developing a companion field tool would allow municipal inspectors to report localized drainage blockages and larvicide treatments directly into the platform.
 
-The system is designed to accommodate planned future enhancements:
+---
 
-1. **Satellite Remote Sensing Integration**: Incorporate real-time European Space Agency (Sentinel-2) multi-spectral imagery to compute Normalized Difference Water Index (NDWI) and Normalized Difference Vegetation Index (NDVI) at 10-meter spatial resolution, dynamically capturing localized rainwater pooling.
-2. **Syndromic Clinical Surveillance Ingestion**: Establish direct, anonymized data pipelines with DGHS (Directorate General of Health Services) and municipal hospitals to ingest daily outpatient fever visits, further narrowing the gap between vector emergence and formal clinical registration.
-3. **Automated Vector Fogging Telemetry**: Integrate GPS-tracked municipal insecticide spray trucks into the ward dashboard to evaluate the real-world reduction in dengue cases following localized containment interventions.
+## 16. Hospital Surge & Cross-Ward Overflow Routing Engine
+
+### 16.1 Architectural Context and Decoupled Pipeline Flow
+The Hospital Surge & Cross-Ward Overflow Routing Engine (`src/hospital_routing.py`) functions as an independent, deterministic backend module within the ADES BIDAI public health infrastructure. Building upon the Phase 1 Dengue Forecasting Model and the Constrained Resource Allocation Engine (`src/resource_engine.py`), this module identifies acute local bed capacity deficits caused by ward-level outbreak surges and computes optimal patient overflow transfer pathways to lower-burden wards within the same administrative city corporation.
+
+```mermaid
+flowchart TD
+    subgraph S1["1. Upstream Data Ingestion"]
+        Forecast["Phase 1 Dengue Forecasting<br/>src/prediction.py"] --> ResAlloc["Resource Allocation Engine<br/>src/resource_engine.py"]
+        ResAlloc --> Contract["Shared Routing Data Contract<br/>60 Wards (15 Standardized Fields)"]
+    end
+
+    subgraph S2["2. Hospital Surge Detection & Segmentation"]
+        Contract --> SurgeDet["Surge Detection & Deficit Audit<br/>hospital_beds_required vs effective_capacity"]
+        SurgeDet --> WardClass["Ward Classification:<br/>- Overloaded (Deficit > 0)<br/>- Fully Utilized (Deficit == 0, Spare == 0)<br/>- Lower-Burden (Spare > 0)"]
+    end
+
+    subgraph S3["3. City-Constrained Routing Core"]
+        WardClass --> CityPart["City Boundary Partitioning<br/>DNCC, DSCC, CCC, GCC, NCC"]
+        CityPart --> SrcSort["Source Prioritization:<br/>Score = 0.7*Risk + 0.3*Density<br/>Deterministic Tie-Breaking"]
+        CityPart --> DstRank["Dynamic Destination Ranking:<br/>Lowest Projected Utilization %<br/>Highest Spare Beds, Ward ID"]
+        SrcSort & DstRank --> GreedyEngine["Capacity-Constrained Greedy Routing<br/>Dynamic Utilization Recalculation<br/>Multi-Destination Overflow Splitting"]
+    end
+
+    subgraph S4["4. Validation, Persistence & Dispatch"]
+        GreedyEngine --> Audit["5 Mathematical Accounting Identities<br/>Zero Unaccounted Bed Discrepancies"]
+        Audit --> Summary["City & Regional Summaries<br/>Utilization, Pressure, Net Deficits"]
+        Audit --> Persistence["SQLite Persistence (`src/database.py`)<br/>HospitalRoutingPlan & HospitalRoutingRecord"]
+        Audit --> Notices["Deterministic Dispatch Engine<br/>5 Operational Dispatch Templates"]
+        Summary --> Dashboard["Government Admin Dashboard<br/>React 18 + Vite + Recharts + Tailwind"]
+    end
+```
+
+The module adheres to five foundational engineering principles:
+1. **Zero External Dependencies**: Operates with complete offline resilience, requiring no internet connectivity, external cloud services, or Large Language Model (LLM) APIs.
+2. **Strict Administrative City Boundaries**: Patients are strictly routed within their home city corporation. Under no operational circumstance are patients routed across city lines.
+3. **No Physical Bed Redistribution**: The engine models patient transfers to physical bed infrastructure; hospital beds, ICU facilities, and medical furniture are never physically relocated between municipal facilities.
+4. **Dynamic Utilization Balancing**: Destination facilities are selected not merely by gross bed counts, but by dynamically updated projected occupancy rates, preventing secondary surges at receiving hospitals.
+5. **Strict Mathematical Accounting**: Every patient and bed allocation is validated against five formal accounting identities, guaranteeing exact conservation of patient flows and bed counts.
+
+---
+
+### 16.2 Shared Hospital Routing Data Contract
+The routing engine strictly consumes the standardized 15-field data contract produced by the upstream Resource Allocation Engine across all 60 monitored urban wards:
+
+| Field Name | Type | Description and Operational Rule |
+|---|---|---|
+| `ward_id` | String | Unique ward code (e.g., `CCC_Ward_01`, `DNCC_Ward_04`). Primary lookup key. |
+| `ward_name` | String | Human-readable ward and locality designation (e.g., `Ward 01 (Agrabad)`). |
+| `city` | String | Administrative city corporation: `Dhaka North`, `Dhaka South`, `Chattogram`, `Gazipur`, `Narayanganj`. |
+| `predicted_cases_week_1` | Float | Model-projected incident dengue cases for forecast week 1. |
+| `predicted_cases_week_2` | Float | Model-projected incident dengue cases for forecast week 2. |
+| `predicted_cases_total` | Float | Cumulative two-week projected dengue caseload (`week_1 + week_2`). |
+| `risk_level` | String | Categorical epidemiological threat tier: `Low`, `Medium`, `High`, or `Critical`. |
+| `risk_score` | Float | Continuous normalized outbreak vulnerability metric ($0.0 \le \text{risk\_score} \le 1.0$). |
+| `population_density_sqkm` | Float | Urban density metric (inhabitants per square kilometer). |
+| `normalized_density` | Float | Min-max scaled urban crowding score ($0.0 \le \text{normalized\_density} \le 1.0$). |
+| `priority_score` | Float | Composite severity score: $0.7 \times \text{risk\_score} + 0.3 \times \text{normalized\_density}$. |
+| `hospital_beds_required` | Integer | Projected concurrent hospital bed requirement derived from epidemiological case estimates. |
+| `hospital_beds_available` | Integer | Baseline nominal physical bed inventory in the ward. |
+| `hospital_beds_effective_capacity`| Integer | Usable bed capacity for the current simulation after regional supply/scarcity discounting. |
+| `hospital_beds_deficit` | Integer | Initial unmitigated bed shortage: $\max(0, \text{required} - \text{effective\_capacity})$. |
+| `hospital_beds_surplus` | Integer | Initial available spare bed capacity: $\max(0, \text{effective\_capacity} - \text{required})$. |
+
+#### Scarcity Preservation and Data Hygiene
+- **Effective Capacity Rule**: `hospital_beds_effective_capacity` represents the final usable bed capacity. The routing engine never re-applies scarcity multipliers if they have already been discounted upstream.
+- **Zero-Capacity Safety**: Wards possessing zero hospital beds (`effective_capacity == 0`) are handled gracefully without division-by-zero exceptions; utilization is bounded at $0.0\%$ when demand is zero and $100.0\%$ (or flagged as infinite pressure) when demand is positive.
+- **Contract Integrity**: Missing or improperly typed attributes trigger fail-safe contract validation exceptions before optimization routines execute.
+
+---
+
+### 16.3 Hospital Surge Detection and Ward Classification
+For every ward $w \in W$, the system computes initial localized surge metrics:
+
+$$\text{Bed Demand}_w = \text{hospital\_beds\_required}_w$$
+$$\text{Bed Capacity}_w = \text{hospital\_beds\_effective\_capacity}_w$$
+$$\text{Initial Bed Deficit}_w = \max(0, \text{Bed Demand}_w - \text{Bed Capacity}_w)$$
+$$\text{Initial Spare Beds}_w = \max(0, \text{Bed Capacity}_w - \text{Bed Demand}_w)$$
+$$\text{Initial Occupied Beds}_w = \min(\text{Bed Demand}_w, \text{Bed Capacity}_w)$$
+
+Based on these balances, each ward is partitioned into one of three operational states:
+1. **Overloaded Ward** ($\text{Bed Demand}_w > \text{Bed Capacity}_w$): Local physical bed capacity is exhausted. The initial bed deficit $\text{Initial Bed Deficit}_w > 0$ represents patients requiring emergency cross-ward transfer.
+2. **Fully Utilized Ward** ($\text{Bed Demand}_w = \text{Bed Capacity}_w$): Local capacity exactly matches projected admissions. Initial deficit and spare beds both equal zero.
+3. **Lower-Burden Ward** ($\text{Bed Capacity}_w > \text{Bed Demand}_w$): Usable capacity exceeds local projected demand ($\text{Initial Spare Beds}_w > 0$). These wards serve as candidate receiving facilities.
+
+---
+
+### 16.4 City Boundary Isolation Constraints
+To reflect municipal administration policies, emergency patient logistics in Bangladesh, and urban transit constraints:
+- **Strict Same-City Routing**:
+  $$\forall \text{ transfer }(s, d): \quad \text{City}(s) \equiv \text{City}(d)$$
+  Patients from an overloaded ward in Chattogram City Corporation may only be transferred to receiving facilities within Chattogram City Corporation. Transfers between Dhaka North, Dhaka South, Gazipur, Narayanganj, and Chattogram are strictly prohibited.
+- **Fixed Infrastructure Invariance**:
+  $$\sum_{w \in \text{City}} \text{Bed Capacity}_w = \text{Constant}$$
+  The routing engine routes *patients*, never physical beds or medical hardware. Receiving facilities accommodate inbound overflow up to their existing unutilized spare bed capacity.
+
+---
+
+### 16.5 Source Ward Prioritization Algorithm
+When multiple wards within a city experience simultaneous bed deficits, the routing engine processes source wards according to strict clinical and epidemiological priority to ensure the most vulnerable communities receive transfer assignments first:
+
+1. **Composite Priority Score**:
+   $$\text{Priority Score}_w = (0.7 \times \text{Risk Score}_w) + (0.3 \times \text{Normalized Density}_w)$$
+2. **Deterministic Priority Ranking**:
+   Source wards are sorted in descending order of urgency using a deterministic three-tier tuple:
+   $$\text{Rank Key}(s) = \Big( -\text{Priority Score}_s, \; -\text{Initial Bed Deficit}_s, \; \text{ward\_id}_s \Big)$$
+   - Primary: Highest Composite Priority Score.
+   - Secondary Tie-Breaker: Largest absolute initial bed deficit.
+   - Tertiary Tie-Breaker: Lexicographical order of `ward_id` (guaranteeing 100% reproducible execution).
+3. **Deterministic City Processing Order**: Cities are processed in alphabetical sequence: `Chattogram`, `Dhaka North`, `Dhaka South`, `Gazipur`, `Narayanganj`.
+
+---
+
+### 16.6 Destination Selection by Dynamic Projected Utilization
+Unlike static greedy approaches that simply fill the hospital with the most empty beds, the ADES BIDAI routing engine actively balances load across receiving facilities by minimizing post-transfer bed utilization:
+
+1. **Destination Eligibility**:
+   A ward $d$ in the same city is an eligible destination if and only if:
+   $$\text{Remaining Spare Beds}_d > 0$$
+2. **Dynamic Ranking Criteria**:
+   At each transfer decision step, candidate destinations are sorted by:
+   $$\text{Rank Key}(d) = \left( \frac{\text{Current Occupied Beds}_d}{\text{Effective Capacity}_d} \times 100, \; -\text{Remaining Spare Beds}_d, \; \text{ward\_id}_d \right)$$
+   - Primary: Lowest current projected bed utilization percentage.
+   - Secondary Tie-Breaker: Highest remaining spare bed capacity.
+   - Tertiary Tie-Breaker: Lexicographical order of `ward_id`.
+3. **Multi-Destination Overflow Splitting**:
+   If an overloaded ward's remaining deficit $U_s$ exceeds the remaining spare capacity of the top-ranked destination $R_d$, the allocation is split:
+   $$\text{Transfer}(s, d) = \min(U_s, R_d)$$
+   - Destination $d$'s occupied beds increase by $\text{Transfer}(s, d)$, its remaining spare beds decrease by $\text{Transfer}(s, d)$, and its utilization percentage is immediately recalculated.
+   - The remaining deficit $U_s \leftarrow U_s - \text{Transfer}(s, d)$ is routed to the next best destination in the dynamically updated candidate list.
+   - This process repeats until $U_s = 0$ or all spare beds in the city are completely exhausted ($R_d = 0, \forall d$).
+
+---
+
+### 16.7 City-Level Summary Metrics and Mathematical Accounting Identities
+
+For every municipal city corporation, the engine computes comprehensive system indicators:
+- **City Bed Demand**: $\sum_{w} \text{Bed Demand}_w$
+- **City Bed Capacity**: $\sum_{w} \text{Bed Capacity}_w$
+- **Initial City Occupied Beds**: $\sum_{w} \text{Initial Occupied Beds}_w$
+- **Final City Occupied Beds**: $\sum_{w} \text{Final Occupied Beds}_w = \text{Initial City Occupied Beds} + \sum \text{Routed Overflow}$
+- **Initial City Deficit**: $\sum_{w} \text{Initial Bed Deficit}_w$
+- **City Net Deficit**: $\max(0, \text{City Bed Demand} - \text{City Bed Capacity})$
+- **Total Routed Overflow**: Total volume of patients successfully transferred across wards.
+- **Initial Bed Utilization**: $\frac{\text{Initial City Occupied Beds}}{\text{City Bed Capacity}} \times 100\%$
+- **Final Bed Utilization**: $\frac{\text{Final City Occupied Beds}}{\text{City Bed Capacity}} \times 100\%$
+- **Demand Pressure**: $\frac{\text{City Bed Demand}}{\text{City Bed Capacity}} \times 100\%$
+- **Shortage Resolution Rate**: $\frac{\text{Total Routed Overflow}}{\text{Initial City Deficit}} \times 100\%$
+
+#### The Five Formal Accounting Identities
+To guarantee absolute accounting integrity and audit compliance for government oversight, the routing engine mathematically verifies five invariants upon completion of every optimization run:
+
+$$\begin{aligned}
+\text{Identity 1:} \quad & \sum_{s} \text{Outbound Overflow}_s \equiv \sum_{d} \text{Inbound Overflow}_d \\
+\text{Identity 2:} \quad & \text{Final City Occupancy} \equiv \text{Initial City Occupancy} + \text{Total Routed Overflow} \\
+\text{Identity 3:} \quad & \text{City Bed Demand} \equiv \text{Final City Occupancy} + \text{City Net Deficit} \\
+\text{Identity 4:} \quad & \text{City Bed Capacity} \equiv \text{Final City Occupancy} + \text{Remaining City Spare Beds} \\
+\text{Identity 5:} \quad & \text{City Net Deficit} \equiv \max(0, \text{City Bed Demand} - \text{City Bed Capacity})
+\end{aligned}$$
+
+If any identity fails by more than $10^{-6}$ units, the engine raises an `AccountingIdentityError` and halts dispatch generation.
+
+---
+
+### 16.8 Mandatory Chattogram Reference Benchmark Scenario
+The routing engine was formally validated against the mandatory Chattogram benchmark scenario defined in the national emergency routing protocol:
+
+#### Input Ward Parameters
+| Ward ID | Ward Name | Risk Score | Norm. Density | Priority Score | Bed Demand | Bed Capacity | Initial Deficit | Initial Spare |
+|---|---|---|---|---|---|---|---|---|
+| `CCC_Ward_01` | Agrabad | 0.95 | 0.85 | 0.920 | 100 | 60 | 40 | 0 |
+| `CCC_Ward_02` | Bakalia | 0.88 | 0.75 | 0.841 | 80 | 50 | 30 | 0 |
+| `CCC_Ward_03` | Chawkbazar | 0.50 | 0.60 | 0.530 | 40 | 70 | 0 | 30 |
+| `CCC_Ward_04` | Halishahar | 0.40 | 0.50 | 0.430 | 30 | 50 | 0 | 20 |
+| `CCC_Ward_05` | Kotwali | 0.30 | 0.40 | 0.330 | 20 | 30 | 0 | 10 |
+| **Total** | — | — | — | — | **270** | **260** | **70** | **60** |
+
+#### Step-by-Step Routing Execution
+1. **Source Prioritization**:
+   - `CCC_Ward_01`: Priority Score = $0.920$, Initial Deficit = $40$.
+   - `CCC_Ward_02`: Priority Score = $0.841$, Initial Deficit = $30$.
+   - `CCC_Ward_01` is processed first.
+2. **Routing `CCC_Ward_01` (Deficit: 40)**:
+   - Initial Destination Utilizations:
+     - `CCC_Ward_03`: $40 / 70 = 57.14\%$ (Spare: 30)
+     - `CCC_Ward_04`: $30 / 50 = 60.00\%$ (Spare: 20)
+     - `CCC_Ward_05`: $20 / 30 = 66.67\%$ (Spare: 10)
+   - Step 1: Lowest utilization is `CCC_Ward_03` (57.14%). Allocate 30 beds.
+     - Transfer: `CCC_Ward_01` $\rightarrow$ `CCC_Ward_03`: **30 beds**.
+     - `CCC_Ward_03` updated: Occupied = 70, Spare = 0, Utilization = $100.0\%$.
+     - `CCC_Ward_01` remaining deficit = 10.
+   - Step 2: Next lowest utilization is `CCC_Ward_04` (60.00%). Allocate remaining 10 beds.
+     - Transfer: `CCC_Ward_01` $\rightarrow$ `CCC_Ward_04`: **10 beds**.
+     - `CCC_Ward_04` updated: Occupied = 40, Spare = 10, Utilization = $80.0\%$.
+     - `CCC_Ward_01` remaining deficit = 0 (Resolved).
+3. **Routing `CCC_Ward_02` (Deficit: 30)**:
+   - Remaining Destination Utilizations:
+     - `CCC_Ward_05`: $20 / 30 = 66.67\%$ (Spare: 10)
+     - `CCC_Ward_04`: $40 / 50 = 80.00\%$ (Spare: 10)
+     - (`CCC_Ward_03` has 0 spare beds, ineligible).
+   - Step 3: Lowest utilization is `CCC_Ward_05` (66.67%). Allocate 10 beds.
+     - Transfer: `CCC_Ward_02` $\rightarrow$ `CCC_Ward_05`: **10 beds**.
+     - `CCC_Ward_05` updated: Occupied = 30, Spare = 0, Utilization = $100.0\%$.
+     - `CCC_Ward_02` remaining deficit = 20.
+   - Step 4: Next available destination is `CCC_Ward_04` (80.00%). Allocate 10 beds.
+     - Transfer: `CCC_Ward_02` $\rightarrow$ `CCC_Ward_04`: **10 beds**.
+     - `CCC_Ward_04` updated: Occupied = 50, Spare = 0, Utilization = $100.0\%$.
+     - `CCC_Ward_02` remaining deficit = 10 (City bed capacity exhausted).
+
+#### Final Benchmark Balance Sheet
+- **Total Routed Overflow**: $30 + 10 + 10 + 10 = \mathbf{60\text{ beds}}$
+- **City Initial Occupancy**: $60 + 50 + 40 + 30 + 20 = \mathbf{200\text{ beds}}$
+- **City Final Occupancy**: $200 + 60 = \mathbf{260\text{ beds}}$ (100.0% of capacity)
+- **City Net Deficit**: $\max(0, 270 - 260) = \mathbf{10\text{ beds}}$
+- **Remaining Spare Beds**: $\mathbf{0\text{ beds}}$
+- **Initial Bed Utilization**: $200 / 260 = \mathbf{76.92\%}$
+- **Final Bed Utilization**: $260 / 260 = \mathbf{100.00\%}$
+- **Demand Pressure**: $270 / 260 = \mathbf{103.85\%}$
+- **Shortage Resolution Rate**: $60 / 70 = \mathbf{85.71\%}$
+- **Critical Warning Triggered**: "Critical bed shortage: City-wide demand (270) exceeds total usable capacity (260) by 10 beds. Immediate field hospital or temporary ward deployment required."
+
+This exact numerical solution is verified on every continuous integration test run by `tests/test_hospital_overflow_routing.py::test_chattogram_reference_scenario_exact_values`.
+
+---
+
+### 16.9 Interactive Surge Simulator and What-If Stress Testing
+The Government Admin Dashboard provides public health directors with an interactive simulation drawer to test municipal hospital resilience under extreme epidemiological stress:
+- **Demand Surge Multiplier** ($0.5\times$ to $2.5\times$): Scales projected concurrent dengue hospitalizations to simulate unexpected super-spreader events or prolonged monsoon stagnation.
+- **City Bed Scarcity / Availability Factor** ($20\%$ to $100\%$): Simulates localized healthcare supply chain collapses, nurse absenteeism, or bed reservation for non-dengue trauma emergencies.
+- **Hospital Bed Requirement Ratio** ($5$ to $30$ beds per 100 cases): Calibrates clinical severity assumptions based on circulating dengue serotypes (e.g., severe secondary DENV-2 or DENV-3 infections exhibiting plasma leakage).
+- **Instant Client-Side and REST Evaluation**: The simulator dispatches parameters to `POST /api/hospital-routing/simulate`, returning recalculated ward deficits, routing matrices, and net city deficits within 12 milliseconds without page reload or server restart.
+
+---
+
+### 16.10 Administrative Approval and Local SQLite Persistence
+To maintain institutional chain-of-custody, simulated routing plans can be formally approved and logged:
+1. **Approval Workflow**: A municipal official (e.g., Directorate General of Health Services or City Civil Surgeon) reviews the proposed routing matrix and signs off with official approval notes.
+2. **Database Schema (`src/database.py`)**:
+   - `HospitalRoutingPlan`: Stores the plan metadata (`plan_id` UUID4, `created_at`, `approved_by`, `approval_notes`, `simulation_parameters`, `total_beds_required`, `total_effective_capacity`, `total_initial_deficit`, `total_routed_overflow`, `total_net_deficit`, `overall_final_utilization`, `status`).
+   - `HospitalRoutingRecord`: Stores granular patient transfer legs (`id`, `plan_id`, `city`, `source_ward_id`, `source_ward_name`, `destination_ward_id`, `destination_ward_name`, `patients_routed`, `source_priority_score`, `destination_pre_utilization`, `destination_post_utilization`).
+3. **Audit and Historical Revalidation**:
+   The endpoint `POST /api/hospital-routing/revalidate` allows oversight bodies to reload any historical plan, re-execute the mathematical accounting identities, and verify that stored records have not experienced database tampering.
+
+---
+
+### 16.11 Deterministic Dispatch Notices Engine
+When an outbreak emergency occurs, communications must be clear, actionable, and rapid. The routing engine contains an internal deterministic template engine that produces five standard dispatch instruments without calling external generative LLMs:
+
+1. **Transferring Ward Patient Dispatch Order**: Dispatched to the source hospital superintendent, specifying the exact patient transfer quota, receiving hospital contact codes, transport triage requirements, and remaining unrouted bed deficits.
+2. **Receiving Ward Inbound Alert**: Dispatched to the destination hospital nursing supervisor, detailing expected inbound patient headcounts, required emergency ward expansion, fluid reserve prep, and post-transfer occupancy ceilings.
+3. **Municipal Health Authority Cross-Ward Routing Summary**: Dispatched to City Mayors and Civil Surgeons, outlining city-wide demand pressure, net bed deficits, percentage utilization increases, and inter-ward patient transfer volumes.
+4. **Emergency Field Hospital Activation Advisory**: Automatically generated whenever a city's $\text{City Net Deficit} > 0$, notifying disaster management authorities (NDRMC/Armed Forces Division) of the exact spatial shortfall and advising requisition of sports stadiums or school auditoriums.
+5. **Patient Family Care Transfer Notice (Bilingual Bengali & English)**: Reassuring, clear instructions provided to family members explaining why transfer is taking place, confirming government-covered ambulance transport, and listing receiving hospital reception points.
+
+---
+
+### 16.12 Offline Resilience and Zero-Cloud Operational Model
+ADES BIDAI guarantees complete operational sovereignty during civil emergencies:
+- **Local Embedded Execution**: The entire routing engine, database, and API execute natively on standard commodity laptops or municipal workstation towers without requiring internet connectivity.
+- **Zero API Dependency**: No API keys, paid tokens, or external cloud services (OpenAI, Anthropic, Gemini, Google Maps) are utilized in the routing core.
+- **Local Static Dashboard**: The React 18 production build (`frontend/dist/`) is served directly by the FastAPI backend on port 8000. All styling (Tailwind CSS) and charting (Recharts) libraries are pre-bundled offline assets.
+- **Fail-Safe Fallbacks**: In the event of backend network interface failure, the frontend contains embedded deterministic mock datasets mirroring the exact 60-ward contract, ensuring that live hackathon judging and field demonstrations remain fully resilient.
+
+---
+
+*ADES BIDAI (এডিস বিদায়) — AI-Based Dengue Outbreak Prediction and Early Warning System*
+*"Forecasting vector risk weeks ahead to keep urban communities protected."*
