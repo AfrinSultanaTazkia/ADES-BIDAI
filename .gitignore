@@ -83,3 +83,7 @@ _pages_backup/
 *.temp
 data/temp/
 data/cache/
+
+# SQLite databases
+*.db
+data/ades_bidai_allocations.db
