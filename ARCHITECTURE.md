@@ -996,5 +996,79 @@ ADES BIDAI guarantees complete operational sovereignty during civil emergencies:
 
 ---
 
+---
+
+## 17. Phase 2: "What-If" Vector Control Impact Simulator & Decision Support Engine
+
+### 17.1 Module Purpose and Operational Goal
+The **What-If Vector Control Impact Simulator** (`src/vector_control_simulator.py`) is an offline decision-support module that models the downstream epidemiological and clinical impact of targeted mosquito-control interventions (larviciding and adulticide fogging). Health officers and municipal commissioners can evaluate candidate crew deployment scenarios over a 2-to-4 week planning window before committing physical field teams.
+
+### 17.2 Mathematical Impact Formulation
+1. **Area-Based Coverage Model**:
+   $$\text{Covered Area} = \text{Deployed Crews} \times \text{Capacity Per Crew (km}^2\text{)}$$
+   $$\text{Coverage Ratio } (r) = \min\left(1.0, \frac{\text{Covered Area}}{\text{Ward Area}}\right)$$
+   *(Fallback when ward area is missing: operational demand ratio $\min(1.0, \text{Crews} / \text{Required Crews})$)*
+
+2. **Diminishing Returns & Response Model**:
+   - **Linear Model**: $\text{Response}(r) = r$
+   - **Saturation Model**: $\text{Response}(r) = \frac{1 - e^{-k \cdot r}}{1 - e^{-k}} \quad (k > 0)$
+
+3. **Time-Lagged Weekly Reduction**:
+   $$\text{Reduction}_{w} = \text{Response}(r) \times \text{Max Effectiveness} \times \text{Weekly Impact Factor}_{w}$$
+   Default weekly factors:
+   - *Larvicide*: $[0.00, 0.40, 0.80, 1.00]$ (delayed larval emergence suppression)
+   - *Fogging*: $[0.00, 0.80, 0.50, 0.20]$ (rapid knockdown, declining persistence)
+
+4. **Multiplicative Bounded Combination Model**:
+   $$\text{Combined Reduction} = 1 - \left[(1 - \text{Larvicide Reduction}) \times (1 - \text{Fogging Reduction})\right]$$
+
+5. **Adjusted Forecasting & Resource Recalculation**:
+   $$\text{Adjusted Cases}_{w} = \text{Baseline Cases}_{w} \times (1 - \text{Combined Reduction}_{w})$$
+   $$\text{Cases Prevented} = \sum \text{Baseline Cases} - \sum \text{Adjusted Cases}$$
+   Downstream resource savings (hospital beds, IV saline, diagnostic kits) are dynamically recalculated using `DengueResourceEngine.calculate_ward_demand()`.
+
+6. **Intervention ROI & Ranking**:
+   $$\text{Intervention ROI} = \frac{\text{Total Expected Cases Prevented}}{\text{Total Deployed Crews}}$$
+   Wards are deterministically ranked by: (1) Descending full-precision ROI, (2) Descending cases prevented, (3) Descending priority score, (4) Ascending ward ID.
+
+7. **Greedy Marginal Benefit Crew Optimizer**:
+   Iteratively evaluates assigning 1 additional crew to the ward and intervention type yielding the highest marginal benefit $\Delta \text{Prevented}$ until the crew pool is exhausted or marginal gain is non-positive.
+
+8. **Section 14 Reference Test Compliance**:
+   Verified by continuous tests in `tests/test_vector_control_simulator.py::test_section_14_reference_simulation`:
+   - $10\text{ km}^2$, $2\text{ km}^2/\text{crew}$, $3$ crews $\rightarrow r = 0.60$
+   - Baseline $[100, 150, 180, 220]$, Reductions $[0.00, 0.072, 0.144, 0.180]$
+   - Adjusted $[100, 139.2, 154.08, 180.4] \rightarrow \text{Display Total } 573$
+   - Cases Prevented: $76.32 \rightarrow \text{Display Total } 77$
+   - Displayed ROI: $77 / 3 = 25.67$, Exact ROI: $25.44$ cases/crew.
+
+---
+
+## 18. Phase 2: Bangla-First Modular Card-Based UI/UX Architecture
+
+### 18.1 UI/UX Design Philosophy & Visual Paradigm
+To eliminate dashboard clutter and cognitive overload for field health officers and ward commissioners, the ADES-BIDAI frontend was refactored into a **Bangla-First Modular Card-Based Dashboard** inspired by clean government citizen-portal designs:
+1. **Clean Professional Palette**: Forest Green (`#006A4E`, representing national public health authority), soft slate background (`#F4F7F4`), clean white cards, subtle borders (`border-slate-200`), and pastel category accents.
+2. **Modular 3-Tier Layout**:
+   - **Header & Navigation Bar**: National branding ("এডিস বিদায় — ডেঙ্গু পূর্বাভাস ও সম্পদ ব্যবস্থাপনা"), real-time offline status indicator (`সম্পূর্ণ অফলাইন`), multi-language toggle (Bangla / English), commissioner approval actions, and quick navigation menu.
+   - **Regional Situation Summary (সামগ্রিক পরিস্থিতি)**: 6 high-level KPI cards aggregating dynamic figures across all 60 wards of the 5 City Corporations (Projected 2-week Cases, Saline Bags, Test Kits, Beds, Spraying Crews, Deficit Wards).
+   - **Click-to-Explore Feature Modules (আমাদের সেবাসমূহ)**: 9 distinct pastel cards with clear iconography, Bengali titles, and operational descriptions leading to dedicated sub-views.
+3. **Dedicated Sub-Views (View-Based Router)**:
+   Replacing crowded single-page tabs with dedicated, context-focused views:
+   - `ডেঙ্গু পূর্বাভাস` (Forecast View)
+   - `সম্পদ বরাদ্দ` (Ward Allocation View with dual City-to-Ward drill-down and resource progress bars)
+   - `ঝুঁকি মানচিত্র` (Geographic Risk Map)
+   - `সম্পদ নিয়ন্ত্রণ` (Regional Scarcity & Crew Sliders)
+   - `হাসপাতাল ব্যবস্থাপনা` (Intra-City Hospital Surge & Cross-Ward Overflow Routing)
+   - `সম্পদ পুনর্বণ্টন` (Inter-Ward Resource Redistribution Engine)
+   - `ঘাটতি ও সতর্কতা` (Supply Deficit Alerts & Vulnerable Ward Directory)
+   - `মশক নিধন কার্যক্রম` (What-If Vector Control Impact Simulator & Crew ROI Ranking)
+   - `বার্তা ও প্রতিবেদন` (Actionable Multi-Channel Dispatch: WhatsApp, PDF, HTML & Audit Log)
+4. **Resilience & Localization**:
+   - Fully local asset bundling (Vite + Tailwind CSS), zero cloud runtime dependencies, deterministic offline fallbacks.
+   - Standard Bengali numeral conversion (`toBangla()`) across all metrics, dates, and tables.
+
+---
+
 *ADES BIDAI (এডিস বিদায়) — AI-Based Dengue Outbreak Prediction and Early Warning System*
 *"Forecasting vector risk weeks ahead to keep urban communities protected."*

@@ -1,0 +1,1248 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ADES BIDAI - Official Dengue Resource Allocation Plan</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0B1120; color: #F8FAFC; margin: 0; padding: 24px; }
+        .container { max-width: 1200px; margin: 0 auto; background: #111827; border: 1px solid #1F2937; border-radius: 12px; padding: 28px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        .header { text-align: center; border-bottom: 2px solid #0284C7; padding-bottom: 16px; margin-bottom: 24px; }
+        .header h1 { font-size: 22px; color: #38BDF8; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+        .header p { font-size: 13px; color: #94A3B8; margin: 0; }
+        .grid-kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+        .kpi-card { background: #1E293B; border: 1px solid #334155; border-radius: 8px; padding: 14px; }
+        .kpi-label { font-size: 11px; text-transform: uppercase; color: #94A3B8; font-weight: 600; margin-bottom: 4px; }
+        .kpi-val { font-size: 20px; font-weight: 700; color: #F8FAFC; }
+        .kpi-val.alert { color: #EF4444; }
+        .section-title { font-size: 16px; font-weight: 700; color: #38BDF8; margin: 24px 0 12px 0; display: flex; align-items: center; gap: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px; }
+        th { background: #1E293B; color: #38BDF8; text-align: left; padding: 8px 10px; border: 1px solid #334155; }
+        td { padding: 8px 10px; border: 1px solid #1F2937; color: #E2E8F0; }
+        tr:nth-child(even) { background: #0F172A; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+        .badge-high { background: #7F1D1D; color: #FCA5A5; }
+        .badge-med { background: #78350F; color: #FCD34D; }
+        .badge-low { background: #064E3B; color: #6EE7B7; }
+        .badge-deficit { background: #DC2626; color: white; }
+        .badge-ok { background: #059669; color: white; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Directorate General of Health Services (DGHS)</h1>
+        <p><b>ADES BIDAI AI-Driven Dengue Resource Allocation & Vector Control Plan</b></p>
+        <p>Generated: 2026-11-27 12:12 UTC | Scarcity Level: 80.0% Stock | Crews: 150</p>
+    </div>
+
+    <div class="grid-kpi">
+        <div class="kpi-card">
+            <div class="kpi-label">Total Predicted Cases</div>
+            <div class="kpi-val">237.39</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">High-Risk Wards</div>
+            <div class="kpi-val ">0 / 60</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Saline Demand vs Allocated</div>
+            <div class="kpi-val">537 / 568</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Critical Deficit Wards</div>
+            <div class="kpi-val alert">6</div>
+        </div>
+    </div>
+
+    <div class="section-title">Priority-Based Ward Allocations (All 60 Wards)</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Ward ID</th>
+                <th>Locality</th>
+                <th>City</th>
+                <th>Priority Score</th>
+                <th>Risk Level</th>
+                <th>Cases (2W)</th>
+                <th>Saline (Dem/Alloc)</th>
+                <th>Kits (Dem/Alloc)</th>
+                <th>Beds (Dem/Alloc)</th>
+                <th>Crews (Req/Assigned)</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            
+            <tr>
+                <td><b>#1</b></td>
+                <td><b>DSCC_Ward_04</b></td>
+                <td>Mugdha</td>
+                <td>Dhaka South</td>
+                <td>0.7200</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>5.42</td>
+                <td>13 / <b>13</b></td>
+                <td>6 / <b>6</b></td>
+                <td>2 / <b>2</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#2</b></td>
+                <td><b>DNCC_Ward_12</b></td>
+                <td>Shah Ali</td>
+                <td>Dhaka North</td>
+                <td>0.7112</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.81</td>
+                <td>11 / <b>11</b></td>
+                <td>6 / <b>6</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#3</b></td>
+                <td><b>GCC_Ward_01</b></td>
+                <td>Gazipur Sector 1</td>
+                <td>Gazipur</td>
+                <td>0.7019</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.65</td>
+                <td>9 / <b>9</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>7 / <b>7</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#4</b></td>
+                <td><b>NCC_Ward_01</b></td>
+                <td>Narayanganj Zone 1</td>
+                <td>Narayanganj</td>
+                <td>0.6851</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.85</td>
+                <td>9 / <b>9</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>4</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#5</b></td>
+                <td><b>DNCC_Ward_05</b></td>
+                <td>Mirpur-6</td>
+                <td>Dhaka North</td>
+                <td>0.6844</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.48</td>
+                <td>8 / <b>8</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#6</b></td>
+                <td><b>CCC_Ward_03</b></td>
+                <td>Panchlaish</td>
+                <td>Chattogram</td>
+                <td>0.6811</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>6.15</td>
+                <td>15 / <b>15</b></td>
+                <td>7 / <b>7</b></td>
+                <td>2 / <b>2</b></td>
+                <td>5 / <b>5</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#7</b></td>
+                <td><b>CCC_Ward_01</b></td>
+                <td>Pahartali</td>
+                <td>Chattogram</td>
+                <td>0.6787</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>5.57</td>
+                <td>13 / <b>13</b></td>
+                <td>6 / <b>6</b></td>
+                <td>2 / <b>2</b></td>
+                <td>6 / <b>6</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#8</b></td>
+                <td><b>DNCC_Ward_18</b></td>
+                <td>Kuril</td>
+                <td>Dhaka North</td>
+                <td>0.6712</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.56</td>
+                <td>11 / <b>11</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>5 / <b>5</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#9</b></td>
+                <td><b>DSCC_Ward_06</b></td>
+                <td>Motijheel</td>
+                <td>Dhaka South</td>
+                <td>0.6606</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>5.66</td>
+                <td>13 / <b>13</b></td>
+                <td>7 / <b>7</b></td>
+                <td>2 / <b>2</b></td>
+                <td>2 / <b>2</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#10</b></td>
+                <td><b>GCC_Ward_04</b></td>
+                <td>Gazipur Sector 4</td>
+                <td>Gazipur</td>
+                <td>0.6604</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.61</td>
+                <td>9 / <b>9</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>8 / <b>8</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#11</b></td>
+                <td><b>GCC_Ward_03</b></td>
+                <td>Gazipur Sector 3</td>
+                <td>Gazipur</td>
+                <td>0.6475</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>5.3</td>
+                <td>13 / <b>13</b></td>
+                <td>6 / <b>6</b></td>
+                <td>2 / <b>2</b></td>
+                <td>7 / <b>7</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#12</b></td>
+                <td><b>DNCC_Ward_16</b></td>
+                <td>Mohakhali</td>
+                <td>Dhaka North</td>
+                <td>0.6453</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.13</td>
+                <td>7 / <b>7</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#13</b></td>
+                <td><b>DSCC_Ward_10</b></td>
+                <td>Lalbagh</td>
+                <td>Dhaka South</td>
+                <td>0.6395</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>5.26</td>
+                <td>13 / <b>13</b></td>
+                <td>6 / <b>6</b></td>
+                <td>2 / <b>2</b></td>
+                <td>2 / <b>2</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#14</b></td>
+                <td><b>GCC_Ward_05</b></td>
+                <td>Gazipur Sector 5</td>
+                <td>Gazipur</td>
+                <td>0.6386</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.78</td>
+                <td>11 / <b>11</b></td>
+                <td>6 / <b>6</b></td>
+                <td>1 / <b>1</b></td>
+                <td>7 / <b>7</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#15</b></td>
+                <td><b>DSCC_Ward_19</b></td>
+                <td>Jatrabari</td>
+                <td>Dhaka South</td>
+                <td>0.6386</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.52</td>
+                <td>11 / <b>11</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#16</b></td>
+                <td><b>DSCC_Ward_08</b></td>
+                <td>Sutrapur</td>
+                <td>Dhaka South</td>
+                <td>0.6363</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.14</td>
+                <td>10 / <b>10</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>2 / <b>2</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#17</b></td>
+                <td><b>DNCC_Ward_11</b></td>
+                <td>Paikpara</td>
+                <td>Dhaka North</td>
+                <td>0.6326</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.59</td>
+                <td>9 / <b>9</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#18</b></td>
+                <td><b>DNCC_Ward_02</b></td>
+                <td>Mirpur-12</td>
+                <td>Dhaka North</td>
+                <td>0.6306</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.35</td>
+                <td>8 / <b>8</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>4</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#19</b></td>
+                <td><b>DNCC_Ward_19</b></td>
+                <td>Banani</td>
+                <td>Dhaka North</td>
+                <td>0.6304</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>6.15</td>
+                <td>15 / <b>15</b></td>
+                <td>7 / <b>7</b></td>
+                <td>2 / <b>2</b></td>
+                <td>4 / <b>4</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#20</b></td>
+                <td><b>DSCC_Ward_12</b></td>
+                <td>Jigatola</td>
+                <td>Dhaka South</td>
+                <td>0.6220</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.81</td>
+                <td>11 / <b>11</b></td>
+                <td>6 / <b>6</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#21</b></td>
+                <td><b>DSCC_Ward_13</b></td>
+                <td>Hazaribagh</td>
+                <td>Dhaka South</td>
+                <td>0.6131</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.52</td>
+                <td>11 / <b>11</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#22</b></td>
+                <td><b>DNCC_Ward_10</b></td>
+                <td>Gabtoli</td>
+                <td>Dhaka North</td>
+                <td>0.6112</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>5.05</td>
+                <td>12 / <b>12</b></td>
+                <td>6 / <b>6</b></td>
+                <td>1 / <b>1</b></td>
+                <td>5 / <b>5</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#23</b></td>
+                <td><b>CCC_Ward_04</b></td>
+                <td>Chandgaon</td>
+                <td>Chattogram</td>
+                <td>0.6103</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.12</td>
+                <td>10 / <b>10</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>5 / <b>5</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#24</b></td>
+                <td><b>GCC_Ward_02</b></td>
+                <td>Gazipur Sector 2</td>
+                <td>Gazipur</td>
+                <td>0.6054</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>6.08</td>
+                <td>14 / <b>14</b></td>
+                <td>7 / <b>7</b></td>
+                <td>2 / <b>2</b></td>
+                <td>6 / <b>6</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#25</b></td>
+                <td><b>DNCC_Ward_09</b></td>
+                <td>Kallyanpur</td>
+                <td>Dhaka North</td>
+                <td>0.5978</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>5.46</td>
+                <td>13 / <b>13</b></td>
+                <td>6 / <b>6</b></td>
+                <td>2 / <b>2</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#26</b></td>
+                <td><b>DNCC_Ward_07</b></td>
+                <td>Mirpur-2</td>
+                <td>Dhaka North</td>
+                <td>0.5922</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>2.89</td>
+                <td>7 / <b>7</b></td>
+                <td>3 / <b>3</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>4</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#27</b></td>
+                <td><b>NCC_Ward_05</b></td>
+                <td>Narayanganj Zone 5</td>
+                <td>Narayanganj</td>
+                <td>0.5818</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>6.1</td>
+                <td>15 / <b>15</b></td>
+                <td>7 / <b>7</b></td>
+                <td>2 / <b>2</b></td>
+                <td>5 / <b>5</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#28</b></td>
+                <td><b>DNCC_Ward_01</b></td>
+                <td>Uttara East</td>
+                <td>Dhaka North</td>
+                <td>0.5790</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.92</td>
+                <td>12 / <b>12</b></td>
+                <td>6 / <b>6</b></td>
+                <td>1 / <b>1</b></td>
+                <td>5 / <b>5</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#29</b></td>
+                <td><b>CCC_Ward_07</b></td>
+                <td>Kotwali</td>
+                <td>Chattogram</td>
+                <td>0.5764</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.54</td>
+                <td>11 / <b>11</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#30</b></td>
+                <td><b>DSCC_Ward_02</b></td>
+                <td>Bashabo</td>
+                <td>Dhaka South</td>
+                <td>0.5749</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.0</td>
+                <td>7 / <b>7</b></td>
+                <td>3 / <b>3</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#31</b></td>
+                <td><b>CCC_Ward_06</b></td>
+                <td>Bakalia</td>
+                <td>Chattogram</td>
+                <td>0.5672</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.5</td>
+                <td>8 / <b>8</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>4</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#32</b></td>
+                <td><b>DSCC_Ward_15</b></td>
+                <td>Azimpur</td>
+                <td>Dhaka South</td>
+                <td>0.5651</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.04</td>
+                <td>7 / <b>7</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>2 / <b>2</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#33</b></td>
+                <td><b>CCC_Ward_08</b></td>
+                <td>Anderkilla</td>
+                <td>Chattogram</td>
+                <td>0.5507</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.2</td>
+                <td>10 / <b>10</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#34</b></td>
+                <td><b>DSCC_Ward_16</b></td>
+                <td>Kamrangirchar North</td>
+                <td>Dhaka South</td>
+                <td>0.5501</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.04</td>
+                <td>7 / <b>7</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#35</b></td>
+                <td><b>DSCC_Ward_20</b></td>
+                <td>Sayedabad</td>
+                <td>Dhaka South</td>
+                <td>0.5357</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>5.14</td>
+                <td>12 / <b>12</b></td>
+                <td>6 / <b>6</b></td>
+                <td>2 / <b>2</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#36</b></td>
+                <td><b>DNCC_Ward_06</b></td>
+                <td>Mirpur-7</td>
+                <td>Dhaka North</td>
+                <td>0.5350</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.59</td>
+                <td>9 / <b>9</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>4</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#37</b></td>
+                <td><b>DSCC_Ward_18</b></td>
+                <td>Postogola</td>
+                <td>Dhaka South</td>
+                <td>0.5299</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.72</td>
+                <td>11 / <b>11</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>2 / <b>2</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#38</b></td>
+                <td><b>DSCC_Ward_03</b></td>
+                <td>Madartek</td>
+                <td>Dhaka South</td>
+                <td>0.5252</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>5.76</td>
+                <td>14 / <b>14</b></td>
+                <td>7 / <b>7</b></td>
+                <td>2 / <b>2</b></td>
+                <td>3 / <b>3</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#39</b></td>
+                <td><b>DNCC_Ward_08</b></td>
+                <td>Mirpur-1</td>
+                <td>Dhaka North</td>
+                <td>0.5248</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.39</td>
+                <td>8 / <b>8</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#40</b></td>
+                <td><b>DSCC_Ward_11</b></td>
+                <td>Dhanmondi</td>
+                <td>Dhaka South</td>
+                <td>0.5203</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.05</td>
+                <td>10 / <b>10</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#41</b></td>
+                <td><b>CCC_Ward_02</b></td>
+                <td>Jalalabad</td>
+                <td>Chattogram</td>
+                <td>0.5181</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.04</td>
+                <td>7 / <b>7</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>5 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#42</b></td>
+                <td><b>DNCC_Ward_03</b></td>
+                <td>Mirpur-11</td>
+                <td>Dhaka North</td>
+                <td>0.5061</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.92</td>
+                <td>12 / <b>12</b></td>
+                <td>6 / <b>6</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#43</b></td>
+                <td><b>NCC_Ward_02</b></td>
+                <td>Narayanganj Zone 2</td>
+                <td>Narayanganj</td>
+                <td>0.5021</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>3.78</td>
+                <td>9 / <b>9</b></td>
+                <td>4 / <b>4</b></td>
+                <td>1 / <b>1</b></td>
+                <td>5 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#44</b></td>
+                <td><b>DNCC_Ward_15</b></td>
+                <td>Cantonment</td>
+                <td>Dhaka North</td>
+                <td>0.5006</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>5.76</td>
+                <td>14 / <b>14</b></td>
+                <td>7 / <b>7</b></td>
+                <td>2 / <b>2</b></td>
+                <td>7 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#45</b></td>
+                <td><b>NCC_Ward_03</b></td>
+                <td>Narayanganj Zone 3</td>
+                <td>Narayanganj</td>
+                <td>0.4965</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.4</td>
+                <td>10 / <b>10</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>5 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#46</b></td>
+                <td><b>DSCC_Ward_05</b></td>
+                <td>Shantinagar</td>
+                <td>Dhaka South</td>
+                <td>0.4940</td>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td>4.52</td>
+                <td>11 / <b>11</b></td>
+                <td>5 / <b>5</b></td>
+                <td>1 / <b>1</b></td>
+                <td>2 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#47</b></td>
+                <td><b>DNCC_Ward_04</b></td>
+                <td>Mirpur-13</td>
+                <td>Dhaka North</td>
+                <td>0.4458</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>1.31</td>
+                <td>3 / <b>3</b></td>
+                <td>2 / <b>2</b></td>
+                <td>0 / <b>0</b></td>
+                <td>3 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#48</b></td>
+                <td><b>NCC_Ward_04</b></td>
+                <td>Narayanganj Zone 4</td>
+                <td>Narayanganj</td>
+                <td>0.4313</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.33</td>
+                <td>6 / <b>6</b></td>
+                <td>3 / <b>3</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#49</b></td>
+                <td><b>DNCC_Ward_17</b></td>
+                <td>Khilkhet</td>
+                <td>Dhaka North</td>
+                <td>0.4086</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>1.84</td>
+                <td>4 / <b>4</b></td>
+                <td>2 / <b>2</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#50</b></td>
+                <td><b>CCC_Ward_10</b></td>
+                <td>Halishahar</td>
+                <td>Chattogram</td>
+                <td>0.3985</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.74</td>
+                <td>7 / <b>7</b></td>
+                <td>3 / <b>3</b></td>
+                <td>1 / <b>1</b></td>
+                <td>5 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#51</b></td>
+                <td><b>DNCC_Ward_14</b></td>
+                <td>Shewrapara</td>
+                <td>Dhaka North</td>
+                <td>0.3841</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.54</td>
+                <td>6 / <b>6</b></td>
+                <td>3 / <b>3</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#52</b></td>
+                <td><b>DSCC_Ward_01</b></td>
+                <td>Khilgaon</td>
+                <td>Dhaka South</td>
+                <td>0.3722</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.37</td>
+                <td>6 / <b>6</b></td>
+                <td>3 / <b>3</b></td>
+                <td>1 / <b>1</b></td>
+                <td>3 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#53</b></td>
+                <td><b>DSCC_Ward_07</b></td>
+                <td>Wari</td>
+                <td>Dhaka South</td>
+                <td>0.3653</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>1.82</td>
+                <td>4 / <b>4</b></td>
+                <td>2 / <b>2</b></td>
+                <td>1 / <b>1</b></td>
+                <td>2 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#54</b></td>
+                <td><b>DSCC_Ward_09</b></td>
+                <td>Armanitola</td>
+                <td>Dhaka South</td>
+                <td>0.3543</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.78</td>
+                <td>7 / <b>7</b></td>
+                <td>3 / <b>3</b></td>
+                <td>1 / <b>1</b></td>
+                <td>2 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-ok">FULFILLED</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#55</b></td>
+                <td><b>DNCC_Ward_13</b></td>
+                <td>Kafrul</td>
+                <td>Dhaka North</td>
+                <td>0.3529</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.09</td>
+                <td>5 / <b>4</b></td>
+                <td>2 / <b>2</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-deficit">SHORTAGE</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#56</b></td>
+                <td><b>CCC_Ward_09</b></td>
+                <td>Agrabad</td>
+                <td>Chattogram</td>
+                <td>0.3483</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.03</td>
+                <td>5 / <b>0</b></td>
+                <td>2 / <b>2</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-deficit">SHORTAGE</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#57</b></td>
+                <td><b>DSCC_Ward_17</b></td>
+                <td>Kamrangirchar South</td>
+                <td>Dhaka South</td>
+                <td>0.3354</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.8</td>
+                <td>7 / <b>0</b></td>
+                <td>3 / <b>3</b></td>
+                <td>1 / <b>1</b></td>
+                <td>2 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-deficit">SHORTAGE</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#58</b></td>
+                <td><b>DNCC_Ward_20</b></td>
+                <td>Gulshan-1</td>
+                <td>Dhaka North</td>
+                <td>0.3279</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.61</td>
+                <td>6 / <b>0</b></td>
+                <td>3 / <b>3</b></td>
+                <td>1 / <b>1</b></td>
+                <td>4 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-deficit">SHORTAGE</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#59</b></td>
+                <td><b>CCC_Ward_05</b></td>
+                <td>Mohra</td>
+                <td>Chattogram</td>
+                <td>0.3103</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.39</td>
+                <td>6 / <b>0</b></td>
+                <td>3 / <b>3</b></td>
+                <td>1 / <b>1</b></td>
+                <td>5 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-deficit">SHORTAGE</span>
+                    
+                </td>
+            </tr>
+            
+            <tr>
+                <td><b>#60</b></td>
+                <td><b>DSCC_Ward_14</b></td>
+                <td>New Market</td>
+                <td>Dhaka South</td>
+                <td>0.3076</td>
+                <td><span class="badge badge-low">Low</span></td>
+                <td>2.42</td>
+                <td>6 / <b>0</b></td>
+                <td>3 / <b>1</b></td>
+                <td>1 / <b>0</b></td>
+                <td>2 / <b>0</b></td>
+                <td>
+                    
+                    <span class="badge badge-deficit">SHORTAGE</span>
+                    
+                </td>
+            </tr>
+            
+        </tbody>
+    </table>
+
+    
+    <div class="section-title">Hospital Bed Capacity Overflow Routing</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Deficit Ward</th>
+                <th>Designated Surplus Hospital</th>
+                <th>Distance</th>
+                <th>Patients Referred</th>
+                <th>Directive</th>
+            </tr>
+        </thead>
+        <tbody>
+            
+            <tr>
+                <td><b>DNCC_Ward_19</b> (Banani)</td>
+                <td><b>DNCC_Ward_04</b> (Mirpur-13)</td>
+                <td>4.3 km</td>
+                <td><b>1 beds</b></td>
+                <td>Assigned 1 overflow beds from Banani (Priority: 0.63) to lower-burden Mirpur-13 (Util: 0.0% -> 100.0%).</td>
+            </tr>
+            
+        </tbody>
+    </table>
+    
+</div>
+</body>
+</html>

@@ -127,6 +127,25 @@ class HospitalRoutingRecord(Base):
     plan = relationship("HospitalRoutingPlan", back_populates="routing_records")
 
 
+class VectorControlPlan(Base):
+    __tablename__ = "vector_control_plans"
+
+    id = Column(Integer, primary_key=True)
+    plan_name = Column(String(100), default="Official Vector Control Deployment Plan")
+    status = Column(String(50), default="Approved")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    approved_at = Column(DateTime, default=datetime.utcnow)
+    approved_by = Column(String(100), default="Central Health Administrator")
+    forecast_horizon_weeks = Column(Integer, default=4)
+    total_available_crews = Column(Integer, default=150)
+    total_deployed_crews = Column(Integer, default=0)
+    total_cases_prevented = Column(Float, default=0.0)
+    total_beds_saved = Column(Integer, default=0)
+    total_saline_bags_saved = Column(Integer, default=0)
+    overall_roi = Column(Float, default=0.0)
+    simulation_data_json = Column(Text, nullable=False)
+
+
 # Engine & Session Setup
 engine = create_engine(
     f"sqlite:///{DB_PATH}",
@@ -399,6 +418,76 @@ def revalidate_hospital_plans(reason: str = "Capacity or demand altered") -> int
     except Exception as e:
         session.rollback()
         raise e
+    finally:
+        session.close()
+
+
+def save_approved_vector_plan(
+    plan_name: str,
+    approved_by: str,
+    simulation_result: Dict[str, Any],
+) -> int:
+    """Persists an approved vector control deployment plan into the SQLite database."""
+    session = SessionLocal()
+    try:
+        meta = simulation_result.get("scenario_metadata", {})
+        regional = simulation_result.get("regional_impact_summary", {})
+
+        plan = VectorControlPlan(
+            plan_name=plan_name,
+            approved_by=approved_by,
+            status="Approved",
+            created_at=datetime.utcnow(),
+            approved_at=datetime.utcnow(),
+            forecast_horizon_weeks=meta.get("forecast_horizon_weeks", 4),
+            total_available_crews=meta.get("total_available_crews", 150),
+            total_deployed_crews=meta.get("total_deployed_crews", 0),
+            total_cases_prevented=float(regional.get("total_cases_prevented", 0.0)),
+            total_beds_saved=int(regional.get("total_beds_saved", 0)),
+            total_saline_bags_saved=int(regional.get("total_saline_bags_saved", 0)),
+            overall_roi=float(regional.get("overall_roi", 0.0) or 0.0),
+            simulation_data_json=json.dumps(simulation_result),
+        )
+        session.add(plan)
+        session.commit()
+        session.refresh(plan)
+
+        log_audit(
+            action="APPROVE_VECTOR_CONTROL_PLAN",
+            details=f"Approved vector control plan '{plan_name}' (ID: {plan.id}) with {plan.total_deployed_crews} crews deployed. Estimated cases prevented: {plan.total_cases_prevented}.",
+            user=approved_by,
+        )
+        return plan.id
+    except Exception as e:
+        session.rollback()
+        raise e
+    finally:
+        session.close()
+
+
+def get_approved_vector_plans(limit: int = 50) -> List[Dict[str, Any]]:
+    """Retrieves list of saved vector control simulation plans."""
+    session = SessionLocal()
+    try:
+        plans = session.query(VectorControlPlan).order_by(VectorControlPlan.created_at.desc()).limit(limit).all()
+        return [
+            {
+                "id": p.id,
+                "plan_name": p.plan_name,
+                "status": p.status,
+                "created_at": p.created_at.isoformat() + "Z" if p.created_at else None,
+                "approved_at": p.approved_at.isoformat() + "Z" if p.approved_at else None,
+                "approved_by": p.approved_by,
+                "forecast_horizon_weeks": p.forecast_horizon_weeks,
+                "total_available_crews": p.total_available_crews,
+                "total_deployed_crews": p.total_deployed_crews,
+                "total_cases_prevented": p.total_cases_prevented,
+                "total_beds_saved": p.total_beds_saved,
+                "total_saline_bags_saved": p.total_saline_bags_saved,
+                "overall_roi": p.overall_roi,
+            }
+            for p in plans
+        ]
     finally:
         session.close()
 

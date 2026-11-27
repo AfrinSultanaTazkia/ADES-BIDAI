@@ -1,0 +1,43 @@
+=== Regional Outbreak Early Warning & Resource Dispatch (SMS) ===
+Target: Central Health & Municipal Commissioners
+[DGHS DENGUE ALERT] Regional stock set to 80.0%. 2-Week Forecast: 237 cases across 60 wards. High-Risk Wards: 0. Allocations: Saline 537/568 bags, Kits 273/275. Spraying Crews Deployed: 150/232. Action: Implement approved plan immediately.
+
+=== Critical Medical Resource Deficit Notice - Kafrul (WhatsApp) ===
+Target: Ward Sanitary Inspector (DNCC_Ward_13)
+🚨 *CRITICAL DEFICIT ALERT - DNCC_Ward_13 (Kafrul)*
+Priority Ranking: #55 (Score: 0.3529)
+Predicted Cases: 2.09 in 2 weeks (Risk: Low)
+Allocated Saline: 4 (Deficit: 1)
+Allocated Kits: 2 (Deficit: 0)
+Spraying Crews: 0 assigned
+Directives: Prioritize emergency fever triage; request inter-ward redistribution from central command.
+
+=== Critical Medical Resource Deficit Notice - Agrabad (WhatsApp) ===
+Target: Ward Sanitary Inspector (CCC_Ward_09)
+🚨 *CRITICAL DEFICIT ALERT - CCC_Ward_09 (Agrabad)*
+Priority Ranking: #56 (Score: 0.3483)
+Predicted Cases: 2.03 in 2 weeks (Risk: Low)
+Allocated Saline: 0 (Deficit: 5)
+Allocated Kits: 2 (Deficit: 0)
+Spraying Crews: 0 assigned
+Directives: Prioritize emergency fever triage; request inter-ward redistribution from central command.
+
+=== Critical Medical Resource Deficit Notice - Kamrangirchar South (WhatsApp) ===
+Target: Ward Sanitary Inspector (DSCC_Ward_17)
+🚨 *CRITICAL DEFICIT ALERT - DSCC_Ward_17 (Kamrangirchar South)*
+Priority Ranking: #57 (Score: 0.3354)
+Predicted Cases: 2.8 in 2 weeks (Risk: Low)
+Allocated Saline: 0 (Deficit: 7)
+Allocated Kits: 3 (Deficit: 0)
+Spraying Crews: 0 assigned
+Directives: Prioritize emergency fever triage; request inter-ward redistribution from central command.
+
+=== Inpatient Surge Routing Directive (Mirpur-13) (WhatsApp) ===
+Target: Medical Superintendent (DNCC_Ward_04 Hospital)
+🏥 *PATIENT SURGE ROUTING DIRECTIVE*
+Origin: DNCC_Ward_19 (Banani)
+Receiving Facility: DNCC_Ward_04 (Mirpur-13) — Distance: 4.32 km
+Patients Routed: 1 beds
+Reason: Assigned 1 overflow beds from Banani (Priority: 0.63) to lower-burden Mirpur-13 (Util: 0.0% -> 100.0%).
+Action: Mobilize reserve bed capacity and notify triage teams.
+

@@ -65,6 +65,14 @@ from src.database import (
     save_approved_hospital_plan,
     get_approved_hospital_plans,
     revalidate_hospital_plans,
+    save_approved_vector_plan,
+    get_approved_vector_plans,
+)
+from src.vector_control_simulator import (
+    VectorControlSimulator,
+    SimulationRequest,
+    create_simulation_request,
+    INTERVENTION_PARAMS,
 )
 from src.reports import generate_pdf_report, generate_html_report, generate_notification_templates
 
@@ -95,6 +103,7 @@ _ARTIFACT: Optional[Dict[str, Any]] = None
 _METRICS: Optional[Dict[str, Any]] = None
 _MODEL_MAE: float = 0.827
 _RESOURCE_ENGINE: Optional[DengueResourceEngine] = None
+_VECTOR_SIMULATOR: Optional[VectorControlSimulator] = None
 
 
 def _safe_float(val, decimals: int = 2) -> Optional[float]:
@@ -187,13 +196,39 @@ class HospitalApprovalRequest(BaseModel):
     custom_bed_capacity: Optional[Dict[str, int]] = None
 
 
+class VectorSimulationRequest(BaseModel):
+    scenario_name: str = Field("Simulated Vector Control Deployment", description="Name of the scenario")
+    forecast_horizon_weeks: int = Field(4, ge=2, le=4, description="Forecast horizon: 2, 3, or 4 weeks")
+    deployment_start_week: int = Field(1, ge=1, le=4, description="Deployment start week (1-4)")
+    total_available_crews: int = Field(150, ge=0, le=1000, description="Total available spraying crew budget")
+    stock_percentage: float = Field(100.0, ge=30.0, le=100.0, description="Regional medical supply availability (30-100%)")
+    selected_ward_ids: Optional[List[str]] = Field(None, description="Optional subset of wards to deploy crews to")
+    larvicide_crews: Optional[Dict[str, int]] = Field(None, description="Ward ID to larvicide crew count")
+    fogging_crews: Optional[Dict[str, int]] = Field(None, description="Ward ID to fogging crew count")
+    response_model: str = Field("saturation", description="'linear' or 'saturation'")
+    custom_params: Optional[Dict[str, Any]] = Field(None, description="Optional parameter overrides for larvicide/fogging")
+
+
+class VectorOptimizationRequest(BaseModel):
+    available_crews: int = Field(50, ge=1, le=1000, description="Crew budget to optimize")
+    intervention_type: str = Field("larvicide", description="'larvicide' or 'fogging'")
+    horizon_weeks: int = Field(4, ge=2, le=4, description="Planning horizon in weeks")
+    ward_subset: Optional[List[str]] = Field(None, description="Optional subset of wards to consider")
+
+
+class VectorApprovalRequest(BaseModel):
+    plan_name: str = Field("Official Vector Control Deployment Plan", description="Name of approved deployment plan")
+    approved_by: str = Field("Central Health Administrator", description="Signatory authority")
+    simulation_result: Dict[str, Any] = Field(..., description="Simulation result payload to commit")
+
+
 # ---------------------------------------------------------------------------
 # Startup Event
 # ---------------------------------------------------------------------------
 @app.on_event("startup")
 def startup_load():
     import gc
-    global _FEATURED_DF, _PREDICTED_DF, _LATEST_PRED_DF, _ARTIFACT, _METRICS, _MODEL_MAE, _RESOURCE_ENGINE
+    global _FEATURED_DF, _PREDICTED_DF, _LATEST_PRED_DF, _ARTIFACT, _METRICS, _MODEL_MAE, _RESOURCE_ENGINE, _VECTOR_SIMULATOR
 
     print("[api] Initializing Resource Engine on specified dataset...")
     csv_path = DEFAULT_DATASET
@@ -201,6 +236,7 @@ def startup_load():
         csv_path = os.path.join(ROOT, "data", "google_sheet_dengue_dataset.csv")
 
     _RESOURCE_ENGINE = DengueResourceEngine(dataset_path=csv_path)
+    _VECTOR_SIMULATOR = VectorControlSimulator(resource_engine=_RESOURCE_ENGINE)
     gc.collect()
 
     print("[api] Loading and preprocessing dataset for Phase 1 endpoints...")
@@ -915,6 +951,143 @@ def revalidate_approved_plans():
         "plans_affected": count,
         "message": f"{count} approved hospital routing plan(s) marked for administrative revalidation.",
     }
+
+
+# ===========================================================================
+# PHASE 2 MODULE: WHAT-IF VECTOR CONTROL IMPACT SIMULATOR ENDPOINTS
+# ===========================================================================
+
+@app.post("/api/simulator/run")
+def run_vector_simulation(payload: VectorSimulationRequest):
+    """
+    Executes the What-If Vector Control Impact Simulator.
+    Simulates 2-4 week downstream reduction in cases, beds, saline, and hospital overflow.
+    """
+    import dataclasses
+    global _VECTOR_SIMULATOR, _RESOURCE_ENGINE
+    if _VECTOR_SIMULATOR is None:
+        if _RESOURCE_ENGINE is None:
+            raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+        _VECTOR_SIMULATOR = VectorControlSimulator(resource_engine=_RESOURCE_ENGINE)
+
+    try:
+        # Default to all 60 wards if none specified
+        selected_wards = payload.selected_ward_ids
+        if not selected_wards:
+            selected_wards = [w["ward_id"] for w in _RESOURCE_ENGINE._base_ward_forecasts]
+
+        larv_crews = payload.larvicide_crews or {}
+        fog_crews = payload.fogging_crews or {}
+
+        req = create_simulation_request(
+            scenario_name=payload.scenario_name,
+            selected_ward_ids=selected_wards,
+            larvicide_crews=larv_crews,
+            fogging_crews=fog_crews,
+            total_available_crews=payload.total_available_crews,
+            forecast_horizon_weeks=payload.forecast_horizon_weeks,
+            deployment_start_week=payload.deployment_start_week,
+            stock_percentage=payload.stock_percentage,
+            intervention_params=payload.custom_params,
+            response_model=payload.response_model,
+        )
+
+        result = _VECTOR_SIMULATOR.run_simulation(req)
+        return dataclasses.asdict(result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Simulation error: {str(e)}")
+
+
+@app.post("/api/simulator/optimize")
+def optimize_crews(payload: VectorOptimizationRequest):
+    """
+    Intelligent Crew Optimization using Marginal Benefit-Based Greedy Algorithm.
+    Allocates crews iteratively to maximize averted dengue cases.
+    """
+    global _VECTOR_SIMULATOR, _RESOURCE_ENGINE
+    if _VECTOR_SIMULATOR is None:
+        if _RESOURCE_ENGINE is None:
+            raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+        _VECTOR_SIMULATOR = VectorControlSimulator(resource_engine=_RESOURCE_ENGINE)
+
+    try:
+        opt = _VECTOR_SIMULATOR.optimize_crew_deployment(
+            available_crews=payload.available_crews,
+            intervention_type=payload.intervention_type,
+            horizon_weeks=payload.horizon_weeks,
+            ward_subset=payload.ward_subset,
+        )
+        return opt
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Optimization error: {str(e)}")
+
+
+@app.get("/api/simulator/potential-roi")
+def get_potential_roi(
+    intervention_type: str = Query("larvicide", description="'larvicide' or 'fogging'"),
+    horizon_weeks: int = Query(4, ge=2, le=4),
+    reference_crews: int = Query(1, ge=1, le=10),
+):
+    """
+    Returns Potential Intervention ROI rankings for all 60 wards based on a 1-crew benchmark.
+    Allows administrators to discover highest-efficiency target wards before assigning crews.
+    """
+    global _VECTOR_SIMULATOR, _RESOURCE_ENGINE
+    if _VECTOR_SIMULATOR is None:
+        if _RESOURCE_ENGINE is None:
+            raise HTTPException(status_code=503, detail="Resource engine not initialized.")
+        _VECTOR_SIMULATOR = VectorControlSimulator(resource_engine=_RESOURCE_ENGINE)
+
+    try:
+        rankings = _VECTOR_SIMULATOR.calculate_potential_roi_ranking(
+            intervention_type=intervention_type,
+            horizon_weeks=horizon_weeks,
+            reference_crews=reference_crews,
+        )
+        return {"potential_roi_rankings": rankings, "total_wards": len(rankings)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/simulator/params")
+def get_intervention_parameters():
+    """Returns the local versioned intervention parameters."""
+    return {
+        "intervention_parameters": INTERVENTION_PARAMS,
+        "status": "configured_simulation_assumption",
+        "offline_resilience": True,
+    }
+
+
+@app.post("/api/simulator/approve")
+def approve_vector_plan(payload: VectorApprovalRequest):
+    """
+    Official Administrator Approval: commits simulated deployment plan to persistent SQLite store.
+    """
+    try:
+        plan_id = save_approved_vector_plan(
+            plan_name=payload.plan_name,
+            approved_by=payload.approved_by,
+            simulation_result=payload.simulation_result,
+        )
+        return {
+            "status": "Approved",
+            "plan_id": plan_id,
+            "plan_name": payload.plan_name,
+            "approved_by": payload.approved_by,
+            "message": f"Vector control plan successfully committed to official registry (Plan ID: {plan_id}).",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Approval persistence error: {str(e)}")
+
+
+@app.get("/api/simulator/plans")
+def get_approved_plans(limit: int = Query(50, ge=1, le=200)):
+    """Retrieves list of officially approved vector control plans from SQLite database."""
+    plans = get_approved_vector_plans(limit=limit)
+    return {"approved_plans": plans, "total_records": len(plans)}
 
 
 # ===========================================================================
