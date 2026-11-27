@@ -151,6 +151,7 @@ export default function App() {
   // Map
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const [mapCityFilter, setMapCityFilter] = useState('ALL');
 
   // What-If Simulator
   const [simScenarioName, setSimScenarioName] = useState('Scenario Alpha');
@@ -296,24 +297,122 @@ export default function App() {
     } catch (err) { console.error(err); setSimError('Failed to approve plan.'); }
   };
 
-  // Map setup
+  // Map setup with OpenStreetMap tiles, all 60 wards bounds, and instant hover tooltips
   useEffect(() => {
     if (activeView === 'map' && allocationData?.wards && mapContainerRef.current) {
       if (!mapInstanceRef.current) {
-        const map = L.map(mapContainerRef.current).setView([23.8103, 90.4125], 11);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap contributors &copy; CARTO', maxZoom: 19 }).addTo(map);
+        const map = L.map(mapContainerRef.current, {
+          center: [23.8103, 90.4125],
+          zoom: 7,
+          zoomControl: true,
+        });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 18,
+        }).addTo(map);
         mapInstanceRef.current = map;
       }
       const map = mapInstanceRef.current;
-      map.eachLayer((layer) => { if (layer instanceof L.CircleMarker) map.removeLayer(layer); });
-      allocationData.wards.forEach((w) => {
+      map.eachLayer((layer) => {
+        if (layer instanceof L.CircleMarker) map.removeLayer(layer);
+      });
+
+      const wardsToShow = (allocationData.wards || []).filter(
+        (w) => mapCityFilter === 'ALL' || w.city === mapCityFilter
+      );
+
+      const markers = [];
+      wardsToShow.forEach((w) => {
+        if (!w.lat || !w.lon) return;
         const color = w.risk_level === 'High' ? '#EF4444' : w.risk_level === 'Medium' ? '#F59E0B' : '#10B981';
         const hasShortage = w.has_critical_deficit;
-        const marker = L.circleMarker([w.lat, w.lon], { radius: Math.min(18, Math.max(6, w.total_predicted_cases * 1.8)), fillColor: color, color: hasShortage ? '#DC2626' : '#FFFFFF', weight: hasShortage ? 2.5 : 1, opacity: 1, fillOpacity: 0.75 }).addTo(map);
-        marker.bindPopup(`<div style="font-family:sans-serif;font-size:12px;color:#1e293b;"><div style="font-weight:700;font-size:14px;margin-bottom:4px;color:${color};">#${w.priority_ranking} — ${w.ward_id} (${w.locality})</div><div><b>সিটি:</b> ${w.city}</div><div><b>অগ্রাধিকার স্কোর:</b> ${w.priority_score.toFixed(4)}</div><div><b>২-সপ্তাহ কেস:</b> ${w.total_predicted_cases} (ঝুঁকি: ${w.risk_level})</div><hr style="border:0.5px solid #e2e8f0;margin:6px 0;"/><div><b>স্যালাইন:</b> ${w.approved_saline_allocation}/${w.saline_demand} (${w.saline_fulfillment_pct}%)</div><div><b>টেস্ট কিট:</b> ${w.approved_kits_allocation}/${w.kits_demand} (${w.kits_fulfillment_pct}%)</div><div><b>শয্যা:</b> ${w.approved_beds_allocation}/${w.beds_demand} (${w.beds_fulfillment_pct}%)</div><div><b>মশক দল:</b> ${w.approved_crew_allocation}/${w.required_crews}</div>${hasShortage ? '<div style="color:#EF4444;font-weight:700;margin-top:4px;">⚠️ সম্পদ ঘাটতি রয়েছে</div>' : '<div style="color:#10B981;font-weight:700;margin-top:4px;">✓ সকল সম্পদ পর্যাপ্ত</div>'}</div>`);
+        const markerRadius = Math.min(18, Math.max(7, Math.round(Math.sqrt(w.total_predicted_cases || 1) * 3)));
+
+        const marker = L.circleMarker([w.lat, w.lon], {
+          radius: markerRadius,
+          fillColor: color,
+          color: hasShortage ? '#DC2626' : '#FFFFFF',
+          weight: hasShortage ? 3 : 1.5,
+          opacity: 1,
+          fillOpacity: 0.85,
+        }).addTo(map);
+
+        // Instant Hover Tooltip ("cursor nile deka jabe shb kichu")
+        marker.bindTooltip(`
+          <div style="font-family:sans-serif;font-size:12px;line-height:1.5;min-width:220px;color:#1e293b;">
+            <div style="font-weight:700;font-size:13px;color:${color};border-bottom:2px solid ${color};padding-bottom:3px;margin-bottom:5px;">
+              📍 #${w.priority_ranking} — ${w.locality} (${w.ward_id})
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+              <span style="color:#64748b;">সিটি কর্পোরেশন:</span>
+              <strong style="color:#0f172a;">${translateCity(w.city)}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+              <span style="color:#64748b;">ঝুঁকির স্তর:</span>
+              <strong style="color:${color};">${translateRisk(w.risk_level)}</strong>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+              <span style="color:#64748b;">সম্ভাব্য রোগী (২ সপ্তাহ):</span>
+              <strong style="color:#006A4E;">${toBangla(Math.round(w.total_predicted_cases))} জন</strong>
+            </div>
+            <div style="margin:5px 0;padding:4px 0;border-top:1px dashed #cbd5e1;border-bottom:1px dashed #cbd5e1;font-size:11px;">
+              <div>💧 <b>স্যালাইন:</b> ${toBangla(w.approved_saline_allocation)}/${toBangla(w.saline_demand)} ব্যাগ (${toBangla(Math.round(w.saline_fulfillment_pct))}%)</div>
+              <div>🧪 <b>টেস্ট কিট:</b> ${toBangla(w.approved_kits_allocation)}/${toBangla(w.kits_demand)} কিট (${toBangla(Math.round(w.kits_fulfillment_pct))}%)</div>
+              <div>🛏️ <b>শয্যা:</b> ${toBangla(w.approved_beds_allocation)}/${toBangla(w.beds_demand)} শয্যা (${toBangla(Math.round(w.beds_fulfillment_pct))}%)</div>
+              <div>👥 <b>মশক দল:</b> ${toBangla(w.approved_crew_allocation)}/${toBangla(w.required_crews)} দল</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#64748b;margin-bottom:3px;">
+              <span>ঘনত্ব: ${toBangla(Math.round(w.population_density_sqkm || 0))} /কিমি²</span>
+              <span>অগ্রাধিকার: ${w.priority_score?.toFixed(3)}</span>
+            </div>
+            <div style="font-weight:700;font-size:11px;text-align:center;padding-top:2px;color:${hasShortage ? '#dc2626' : '#16a34a'};">
+              ${hasShortage ? '⚠️ সম্পদ ঘাটতি সতর্কতা' : '✓ সম্পদ সন্তোষজনক'}
+            </div>
+          </div>
+        `, {
+          direction: 'top',
+          offset: [0, -8],
+          opacity: 0.98,
+          sticky: true,
+          className: 'leaflet-custom-tooltip'
+        });
+
+        // Click Popup for pinned detailed viewing
+        marker.bindPopup(`
+          <div style="font-family:sans-serif;font-size:13px;line-height:1.6;color:#1e293b;min-width:240px;">
+            <div style="font-weight:700;font-size:15px;color:#006A4E;border-bottom:2px solid #006A4E;padding-bottom:4px;margin-bottom:6px;">
+              🏥 ${w.locality} (${w.ward_id})
+            </div>
+            <div><b>সিটি:</b> ${translateCity(w.city)} | <b>ক্রম:</b> #${toBangla(w.priority_ranking)}</div>
+            <div><b>অগ্রাধিকার স্কোর:</b> ${w.priority_score?.toFixed(4)}</div>
+            <div><b>২-সপ্তাহে সম্ভাব্য রোগী:</b> <b>${toBangla(Math.round(w.total_predicted_cases))} জন</b> (${translateRisk(w.risk_level)})</div>
+            <hr style="margin:6px 0;border:0.5px solid #e2e8f0;"/>
+            <div><b>💧 স্যালাইন চাহিদা/বরাদ্দ:</b> ${toBangla(w.approved_saline_allocation)} / ${toBangla(w.saline_demand)} ব্যাগ</div>
+            <div><b>🧪 টেস্ট কিট চাহিদা/বরাদ্দ:</b> ${toBangla(w.approved_kits_allocation)} / ${toBangla(w.kits_demand)} কিট</div>
+            <div><b>🛏️ হাসপাতাল শয্যা:</b> ${toBangla(w.approved_beds_allocation)} / ${toBangla(w.beds_demand)} শয্যা</div>
+            <div><b>👥 মশক নিধন দল:</b> ${toBangla(w.approved_crew_allocation)} / ${toBangla(w.required_crews)} দল</div>
+            <hr style="margin:6px 0;border:0.5px solid #e2e8f0;"/>
+            <div style="font-size:11px;color:#64748b;">
+              জনসংখ্যা ঘনত্ব: ${toBangla(Math.round(w.population_density_sqkm || 0))} জন/বর্গকিমি<br/>
+              জলাবদ্ধতা ঝুঁকি: ${toBangla(w.water_logging_risk_index || 0.5)} | স্যানিটেশন: ${toBangla(w.sanitation_score || 0.5)}
+            </div>
+          </div>
+        `);
+
+        marker.on('mouseover', () => { marker.setRadius(markerRadius + 3); });
+        marker.on('mouseout', () => { marker.setRadius(markerRadius); });
+        markers.push(marker);
       });
+
+      // Fit map bounds cleanly so all selected wards are visible across Bangladesh
+      if (wardsToShow.length > 0) {
+        const bounds = L.latLngBounds(wardsToShow.map((w) => [w.lat, w.lon]));
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: mapCityFilter === 'ALL' ? 10 : 13 });
+      }
+
+      setTimeout(() => { map.invalidateSize(); }, 250);
     }
-  }, [activeView, allocationData]);
+  }, [activeView, allocationData, mapCityFilter]);
 
   const filteredWards = useMemo(() => {
     if (!allocationData?.wards) return [];
@@ -447,55 +546,130 @@ export default function App() {
 
   // ── FORECAST VIEW ─────────────────────────────────────────────────────────
   const ForecastView = () => {
-    const topWards = (allocationData?.wards || []).slice(0, 10);
+    const [fcSearch, setFcSearch] = useState('');
+    const [fcCity, setFcCity] = useState('ALL');
+    const allWards = allocationData?.wards || [];
+    const displayedWards = allWards.filter((w) => {
+      const matchCity = fcCity === 'ALL' || w.city === fcCity;
+      const matchSearch = !fcSearch || w.ward_id.toLowerCase().includes(fcSearch.toLowerCase()) || (w.locality || '').toLowerCase().includes(fcSearch.toLowerCase());
+      return matchCity && matchSearch;
+    });
+
     return (
       <div>
         <Breadcrumb current={bn.forecast} onHome={() => setActiveView('home')} />
-        <PageHeader title="📈 ডেঙ্গু পূর্বাভাস" desc="আগামী ২ সপ্তাহের ওয়ার্ডভিত্তিক ডেঙ্গু পূর্বাভাস ও ঝুঁকির স্তর — বিদ্যমান ML মডেল থেকে" />
+        <PageHeader title="📈 ডেঙ্গু পূর্বাভাস ও ঝুঁকি বিশ্লেষণ" desc="অনসাইট ডেটাসেট ও ML মডেল ভিত্তিক আগামী ২ সপ্তাহের ওয়ার্ডভিত্তিক ডেঙ্গু রোগী ও ঝুঁকির পূর্বাভাস" color="#006A4E" />
+
+        {/* 4 Summary Stat Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'মোট পূর্বাভাস রোগী', val: fmt(Math.round(overview.total_predicted_cases || 0)), sub: 'আগামী ২ সপ্তাহ', color: 'text-rose-600' },
-            { label: 'উচ্চ ঝুঁকির ওয়ার্ড', val: fmt(overview.high_risk_wards_count || 0), sub: 'High Risk', color: 'text-orange-600' },
-            { label: 'মাঝারি ঝুঁকির ওয়ার্ড', val: fmt(overview.medium_risk_wards_count || 0), sub: 'Medium Risk', color: 'text-amber-600' },
-            { label: 'নিম্ন ঝুঁকির ওয়ার্ড', val: fmt(60 - (overview.high_risk_wards_count || 0) - (overview.medium_risk_wards_count || 0)), sub: 'Low Risk', color: 'text-green-600' },
+            { label: 'মোট পূর্বাভাস রোগী', val: fmt(Math.round(overview.total_predicted_cases || 0)), sub: 'আগামী ২ সপ্তাহ (অনসাইট ডেটাসেট)', color: 'text-rose-600' },
+            { label: 'উচ্চ ঝুঁকির ওয়ার্ড', val: fmt(overview.high_risk_wards_count || 0), sub: 'জরুরি প্রতিরোধ আবশ্যক', color: 'text-orange-600' },
+            { label: 'মাঝারি ঝুঁকির ওয়ার্ড', val: fmt(overview.medium_risk_wards_count || 0), sub: 'নজরদারি প্রয়োজন', color: 'text-amber-600' },
+            { label: 'নিম্ন ঝুঁকির ওয়ার্ড', val: fmt(60 - (overview.high_risk_wards_count || 0) - (overview.medium_risk_wards_count || 0)), sub: 'স্বাভাবিক পরিস্থিতি', color: 'text-green-600' },
           ].map((k, i) => (
-            <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+            <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow transition">
               <div className="text-xs text-slate-500 mb-1">{k.label}</div>
               <div className={`text-3xl font-black ${k.color}`}>{k.val}</div>
               <div className="text-[10px] text-slate-400 mt-1">{k.sub}</div>
             </div>
           ))}
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm mb-5">
-          <h3 className="font-bold text-slate-700 mb-4 text-sm">📊 সিটি কর্পোরেশন অনুযায়ী পূর্বাভাস চার্ট</h3>
+
+        {/* City Chart */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm mb-6">
+          <h3 className="font-bold text-slate-700 mb-4 text-sm flex items-center justify-between">
+            <span>📊 ৫টি সিটি কর্পোরেশন অনুযায়ী ডেঙ্গু রোগীর সম্ভাব্য সংখ্যা</span>
+            <span className="text-xs text-slate-400 font-normal">অনসাইট ডেটাসেট ভিত্তিক সংকলন</span>
+          </h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={citySummaryData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="city" stroke="#94a3b8" fontSize={11} />
+                <XAxis dataKey="city" stroke="#94a3b8" fontSize={11} tickFormatter={(val) => translateCity(val)} />
                 <YAxis stroke="#94a3b8" fontSize={11} />
-                <Tooltip contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', fontSize: '12px' }} />
-                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                <Tooltip contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', fontSize: '12px' }} formatter={(val) => [`${toBangla(val)} জন`, 'সম্ভাব্য রোগী']} labelFormatter={(label) => translateCity(label)} />
+                <Legend wrapperStyle={{ fontSize: '11px' }} formatter={(val) => 'সম্ভাব্য ডেঙ্গু রোগী'} />
                 <Bar dataKey="cases" fill="#006A4E" name="সম্ভাব্য রোগী" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
+
+        {/* 60 Wards Interactive Table */}
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 font-bold text-slate-700 text-sm">🏆 শীর্ষ ১০ অগ্রাধিকার ওয়ার্ড</div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-500 font-bold">
-                <tr><th className="px-4 py-3">ক্রম</th><th className="px-4 py-3">ওয়ার্ড</th><th className="px-4 py-3">ঝুঁকি</th><th className="px-4 py-3">সম্ভাব্য রোগী</th><th className="px-4 py-3">অগ্রাধিকার স্কোর</th></tr>
+          <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-slate-700 text-sm">📋 ৬০টি ওয়ার্ডের বিস্তারিত ডেঙ্গু পূর্বাভাস ও অনসাইট সূচক তালিকা</h3>
+              <p className="text-xs text-slate-400 mt-0.5">প্রদর্শিত হচ্ছে: {toBangla(displayedWards.length)} টি ওয়ার্ড</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={fcCity}
+                onChange={(e) => setFcCity(e.target.value)}
+                className="text-xs border border-slate-300 rounded-xl px-3 py-1.5 text-slate-700 focus:outline-none focus:border-[#006A4E] bg-white"
+              >
+                <option value="ALL">সকল সিটি কর্পোরেশন</option>
+                <option value="Dhaka North">ঢাকা উত্তর (DNCC)</option>
+                <option value="Dhaka South">ঢাকা দক্ষিণ (DSCC)</option>
+                <option value="Chattogram">চট্টগ্রাম (CCC)</option>
+                <option value="Gazipur">গাজীপুর (GCC)</option>
+                <option value="Narayanganj">নারায়ণগঞ্জ (NCC)</option>
+              </select>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                <input
+                  type="text"
+                  placeholder="ওয়ার্ড বা এলাকা খুঁজুন..."
+                  value={fcSearch}
+                  onChange={(e) => setFcSearch(e.target.value)}
+                  className="text-xs border border-slate-300 rounded-xl pl-8 pr-3 py-1.5 text-slate-700 focus:outline-none focus:border-[#006A4E]"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="overflow-x-auto max-h-[500px]">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 font-bold sticky top-0 z-10 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3">ক্রম</th>
+                  <th className="px-4 py-3">ওয়ার্ড ও এলাকা</th>
+                  <th className="px-4 py-3">সিটি</th>
+                  <th className="px-4 py-3">ঘনত্ব (জন/বর্গকিমি)</th>
+                  <th className="px-4 py-3">ঝুঁকির স্তর</th>
+                  <th className="px-4 py-3">সম্ভাব্য রোগী (২ সপ্তাহ)</th>
+                  <th className="px-4 py-3">অগ্রাধিকার স্কোর</th>
+                  <th className="px-4 py-3 text-center">পদক্ষেপ</th>
+                </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {topWards.map((w) => (
+                {displayedWards.map((w) => (
                   <tr key={w.ward_id} className="hover:bg-slate-50 transition">
-                    <td className="px-4 py-3"><span className="font-bold text-[#006A4E]">#{w.priority_ranking}</span></td>
-                    <td className="px-4 py-3"><div className="font-semibold text-slate-800">{w.ward_id}</div><div className="text-xs text-slate-400">{w.locality} • {w.city}</div></td>
-                    <td className="px-4 py-3"><span className={`text-xs font-bold px-2 py-0.5 rounded-full ${w.risk_level === 'High' ? 'bg-red-100 text-red-700' : w.risk_level === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>{translateRisk(w.risk_level)}</span></td>
-                    <td className="px-4 py-3 font-bold text-slate-800">{fmt(w.total_predicted_cases)}</td>
-                    <td className="px-4 py-3 font-mono text-[#006A4E] font-bold">{w.priority_score?.toFixed(4)}</td>
+                    <td className="px-4 py-3 font-bold text-[#006A4E]">#{toBangla(w.priority_ranking)}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-800">{w.locality}</div>
+                      <div className="text-[11px] text-slate-400">{w.ward_id}</div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{translateCity(w.city)}</td>
+                    <td className="px-4 py-3 text-slate-600">{toBangla(Math.round(w.population_density_sqkm || 0))}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                        w.risk_level === 'High' ? 'bg-red-100 text-red-700' :
+                        w.risk_level === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                      }`}>
+                        {translateRisk(w.risk_level)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-bold text-slate-800">{toBangla(Math.round(w.total_predicted_cases))} জন</td>
+                    <td className="px-4 py-3 font-mono font-bold text-[#006A4E]">{w.priority_score?.toFixed(4)}</td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => { setSelectedCityCorp(w.city); setSelectedWardId(w.ward_id); setActiveView('allocation'); }}
+                        className="bg-[#006A4E]/10 hover:bg-[#006A4E] hover:text-white text-[#006A4E] font-bold text-[11px] px-2.5 py-1 rounded-lg transition"
+                      >
+                        বরাদ্দ দেখুন →
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -568,6 +742,26 @@ export default function App() {
               </div>
               <div className="flex items-center gap-3">
                 <span className={`px-4 py-1.5 rounded-full font-bold text-sm border-2 ${selectedWard.risk_level === 'High' ? 'bg-red-50 text-red-700 border-red-200' : selectedWard.risk_level === 'Medium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-green-50 text-green-700 border-green-200'}`}>{translateRisk(selectedWard.risk_level)}</span>
+              </div>
+            </div>
+
+            {/* Onsite Dataset Features Strip */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                <span className="text-[11px] text-slate-500 font-semibold block">👥 জনসংখ্যা ঘনত্ব (অনসাইট ডেটাসেট)</span>
+                <span className="text-base font-black text-[#006A4E] mt-0.5 block">{toBangla(Math.round(selectedWard.population_density_sqkm || 0))} <span className="text-xs font-normal text-slate-400">জন/কিমি²</span></span>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                <span className="text-[11px] text-slate-500 font-semibold block">🌊 জলাবদ্ধতা ঝুঁকি সূচক</span>
+                <span className="text-base font-black text-blue-700 mt-0.5 block">{toBangla(selectedWard.water_logging_risk_index || 0.65)} <span className="text-xs font-normal text-slate-400">/ ১.০০</span></span>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                <span className="text-[11px] text-slate-500 font-semibold block">🧼 স্যানিটেশন স্কোর</span>
+                <span className="text-base font-black text-emerald-700 mt-0.5 block">{toBangla(selectedWard.sanitation_score || 0.72)} <span className="text-xs font-normal text-slate-400">/ ১.০০</span></span>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                <span className="text-[11px] text-slate-500 font-semibold block">🌡️ জলবায়ু ফ্যাক্টর (অনসাইট ডেটা)</span>
+                <span className="text-base font-black text-amber-700 mt-0.5 block">{toBangla(selectedWard.avg_temp_c || 28.5)}°C • {toBangla(selectedWard.relative_humidity_pct || 78)}%</span>
               </div>
             </div>
 
@@ -694,14 +888,48 @@ export default function App() {
   const MapView = () => (
     <div>
       <Breadcrumb current={bn.map} onHome={() => setActiveView('home')} />
-      <PageHeader title="🗺️ ঝুঁকি ও নজরদারি মানচিত্র" desc="৬০টি ওয়ার্ডের ডেঙ্গু ঝুঁকির ইন্টার‍্যাক্টিভ মানচিত্র" color="#2563eb" />
-      <div className="flex items-center justify-end gap-4 text-xs text-slate-500 mb-3 flex-wrap">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> উচ্চ ঝুঁকি</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block" /> মাঝারি ঝুঁকি</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> নিম্ন ঝুঁকি</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full border-2 border-red-500 bg-transparent inline-block" /> সম্পদ ঘাটতি</span>
+      <PageHeader title="🗺️ ঝুঁকি ও নজরদারি মানচিত্র" desc="৬০টি ওয়ার্ডের ডেঙ্গু ঝুঁকির ইন্টার‍্যাক্টিভ মানচিত্র — কার্সার নিলেই রিয়েলটাইম তথ্য ও ঘাটতি সতর্কতা" color="#2563eb" />
+
+      {/* City Filter Pills */}
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-bold text-slate-600 mr-1">সিটি ফিল্টার:</span>
+          {[
+            { id: 'ALL', label: 'সকল সিটি (৬০টি ওয়ার্ড)' },
+            { id: 'Dhaka North', label: 'ঢাকা উত্তর (২০)' },
+            { id: 'Dhaka South', label: 'ঢাকা দক্ষিণ (২০)' },
+            { id: 'Chattogram', label: 'চট্টগ্রাম (১০)' },
+            { id: 'Gazipur', label: 'গাজীপুর (৫)' },
+            { id: 'Narayanganj', label: 'নারায়ণগঞ্জ (৫)' },
+          ].map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setMapCityFilter(c.id)}
+              className={`text-xs px-3.5 py-1.5 rounded-full font-semibold transition border ${
+                mapCityFilter === c.id
+                  ? 'bg-[#006A4E] text-white border-[#006A4E] shadow-sm'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> উচ্চ ঝুঁকি</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block" /> মাঝারি ঝুঁকি</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" /> নিম্ন ঝুঁকি</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full border-2 border-red-500 bg-transparent inline-block" /> সম্পদ ঘাটতি</span>
+        </div>
       </div>
-      <div className="w-full h-[620px] rounded-2xl border border-slate-200 overflow-hidden shadow-lg">
+
+      {/* Hover Information Banner */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs text-emerald-900 flex items-center justify-between gap-2 mb-3 flex-wrap">
+        <span>💡 <strong>ইন্টারেক্টিভ গাইড:</strong> মানচিত্রের যে কোনো ওয়ার্ড মার্কারের ওপর <strong>মাউস পয়েন্টার রাখুন (Hover)</strong> — তাৎক্ষণিক চাহিদা, বরাদ্দ, ঘনত্ব ও ঝুঁকির পূর্ণ বিবরণ ভেসে উঠবে। ক্লিক করলে বিস্তারিত কার্ড পিন থাকবে।</span>
+        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-200/80 px-2.5 py-0.5 rounded-full">অনসাইট ডেটাসেট সক্রিয়</span>
+      </div>
+
+      <div className="w-full h-[620px] rounded-2xl border border-slate-200 overflow-hidden shadow-lg bg-slate-100">
         <div ref={mapContainerRef} className="w-full h-full" />
       </div>
     </div>

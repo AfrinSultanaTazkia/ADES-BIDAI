@@ -328,7 +328,9 @@ def load_clean_dataset():
         'min_temp_c': 'float32', 'rainfall_mm': 'float32', 'relative_humidity_pct': 'float32',
         'dengue_cases': 'int16'
     }
-    raw_csv = os.path.join(ROOT_DIR, "data", "google_sheet_dengue_dataset.csv")
+    raw_csv = os.path.join(ROOT_DIR, "data", "bangladesh_dengue_large_dataset_onsite - bangladesh_dengue_large_dataset.csv")
+    if not os.path.exists(raw_csv):
+        raw_csv = os.path.join(ROOT_DIR, "data", "google_sheet_dengue_dataset.csv")
     if not os.path.exists(raw_csv):
         raw_csv = os.path.join(ROOT_DIR, "data", "hackathon_preli_dataset - bangladesh_dengue_large_dataset.csv")
         
