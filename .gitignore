@@ -11,6 +11,8 @@ __pycache__/
 # Distribution & Build
 build/
 dist/
+!frontend/dist/
+!frontend/dist/**
 node_modules/
 frontend/node_modules/
 develop-eggs/
@@ -21,6 +23,8 @@ lib/
 lib64/
 parts/
 sdist/
+!frontend/dist/
+!frontend/dist/**
 var/
 wheels/
 *.egg-info/
