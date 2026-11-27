@@ -56,30 +56,47 @@ def map_quantile_tier(val: float, thresholds: dict) -> str:
         return "Critical"
 
 
-def predict_dataframe(df: pd.DataFrame, model_path: str = "models/dengue_outbreak_model.joblib") -> pd.DataFrame:
+def predict_dataframe(
+    df: pd.DataFrame,
+    model_path: str = "models/dengue_outbreak_model.joblib",
+    chunk_size: int = 2000,
+) -> pd.DataFrame:
     """
     Generates dynamic predictions and risk tiers for a featured DataFrame.
+    Uses chunked inference to avoid MemoryError on large datasets.
     Returns the DataFrame augmented with:
     - predicted_cases (float)
     - predicted_risk_tier (Low / Medium / High / Critical)
     """
+    import gc
+
     artifact = load_model(model_path)
     model = artifact["model"]
     feature_cols = artifact["feature_cols"]
     thresholds = artifact.get("quantile_thresholds")
-    
+
     missing_cols = [c for c in feature_cols if c not in df.columns]
     if missing_cols:
         raise ValueError(f"Input DataFrame is missing required features: {missing_cols}")
-        
-    X = df[feature_cols]
-    raw_preds = model.predict(X)
+
+    X = df[feature_cols].astype(np.float32)  # reduce memory footprint
+
+    # Chunked prediction to avoid allocating a huge numpy array at once
+    all_preds = []
+    n = len(X)
+    for start in range(0, n, chunk_size):
+        chunk = X.iloc[start : start + chunk_size]
+        chunk_preds = model.predict(chunk)
+        all_preds.append(chunk_preds)
+        gc.collect()
+
+    raw_preds = np.concatenate(all_preds)
     clipped_preds = np.clip(raw_preds, 0, None)
-    
+
     output_df = df.copy()
     output_df["predicted_cases"] = np.round(clipped_preds, 2)
     output_df["predicted_risk_tier"] = [map_quantile_tier(p, thresholds) for p in clipped_preds]
-    
+
     return output_df
 
 

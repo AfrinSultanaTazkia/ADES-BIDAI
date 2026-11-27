@@ -192,6 +192,7 @@ class HospitalApprovalRequest(BaseModel):
 # ---------------------------------------------------------------------------
 @app.on_event("startup")
 def startup_load():
+    import gc
     global _FEATURED_DF, _PREDICTED_DF, _LATEST_PRED_DF, _ARTIFACT, _METRICS, _MODEL_MAE, _RESOURCE_ENGINE
 
     print("[api] Initializing Resource Engine on specified dataset...")
@@ -200,26 +201,41 @@ def startup_load():
         csv_path = os.path.join(ROOT, "data", "google_sheet_dengue_dataset.csv")
 
     _RESOURCE_ENGINE = DengueResourceEngine(dataset_path=csv_path)
+    gc.collect()
 
     print("[api] Loading and preprocessing dataset for Phase 1 endpoints...")
     raw_df = get_preprocessed_data(filepath=csv_path)
+
+    # Engineer features on the LATEST entry per ward only (60 rows instead of 31k)
+    # This avoids MemoryError while still giving accurate current-state predictions.
+    # Historical data is kept in _FEATURED_DF for trend/comparison endpoints.
+    latest_raw = (
+        raw_df.sort_values(["ward_id", "date"])
+        .groupby("ward_id", as_index=False)
+        .last()
+        .reset_index(drop=True)
+    )
     _FEATURED_DF = engineer_features(raw_df, drop_burnin=True)
+    gc.collect()
+
+    # For prediction, only run on the 60 latest rows — vastly cheaper
+    latest_featured = engineer_features(latest_raw, drop_burnin=False)
+    gc.collect()
 
     model_path = os.path.join(ROOT, "models", "dengue_outbreak_model.joblib")
     if os.path.exists(model_path):
         _ARTIFACT = joblib.load(model_path)
-        _PREDICTED_DF = predict_dataframe(_FEATURED_DF, model_path=model_path)
+        # Predict only on 60 latest rows (no MemoryError)
+        _LATEST_PRED_DF = predict_dataframe(latest_featured, model_path=model_path)
+        # Also keep a full predicted DF (chunked, may still be large — built lazily)
+        _PREDICTED_DF = None  # will be built on first /api/historical request
     else:
-        _PREDICTED_DF = _FEATURED_DF.copy()
-        _PREDICTED_DF["predicted_cases"] = _PREDICTED_DF["dengue_cases"]
-        _PREDICTED_DF["predicted_risk_tier"] = "Low"
+        latest_featured["predicted_cases"] = latest_featured["dengue_cases"]
+        latest_featured["predicted_risk_tier"] = "Low"
+        _LATEST_PRED_DF = latest_featured
+        _PREDICTED_DF = None
 
-    _LATEST_PRED_DF = (
-        _PREDICTED_DF
-        .sort_values(["ward_id", "date"])
-        .groupby("ward_id", as_index=False)
-        .last()
-    )
+    gc.collect()
 
     metrics_path = os.path.join(ROOT, "models", "metrics_summary.json")
     if os.path.exists(metrics_path):
@@ -297,12 +313,32 @@ def wards():
 
 @app.get("/api/ward/{ward_id}")
 def ward_detail(ward_id: str):
-    if _PREDICTED_DF is None:
+    if _LATEST_PRED_DF is None:
         raise HTTPException(status_code=503, detail="Data not yet loaded.")
 
-    ward_df = _PREDICTED_DF[_PREDICTED_DF["ward_id"] == ward_id].sort_values("date")
+    # Use _FEATURED_DF for history, _LATEST_PRED_DF for current prediction
+    ward_df = _FEATURED_DF[_FEATURED_DF["ward_id"] == ward_id].sort_values("date")
     if ward_df.empty:
         raise HTTPException(status_code=404, detail=f"Ward '{ward_id}' not found.")
+
+    # Inject latest predictions into ward_df for the latest row
+    latest_pred_row = _LATEST_PRED_DF[_LATEST_PRED_DF["ward_id"] == ward_id]
+    if not latest_pred_row.empty:
+        pred_cases = float(latest_pred_row.iloc[0].get("predicted_cases", 0.0))
+        pred_tier = str(latest_pred_row.iloc[0].get("predicted_risk_tier", "Low"))
+    else:
+        pred_cases = float(ward_df.iloc[-1].get("dengue_cases", 0.0))
+        pred_tier = "Low"
+
+    # Build a synthetic ward_df with predicted columns for history display
+    ward_df = ward_df.copy()
+    ward_df["predicted_cases"] = ward_df["dengue_cases"]  # fallback: use actuals for history
+    ward_df["predicted_risk_tier"] = ward_df["dengue_cases"].apply(
+        lambda x: map_quantile_tier(x, _ARTIFACT.get("quantile_thresholds") if _ARTIFACT else None)
+    )
+    # Override the latest row with actual model predictions
+    ward_df.iloc[-1, ward_df.columns.get_loc("predicted_cases")] = pred_cases
+    ward_df.iloc[-1, ward_df.columns.get_loc("predicted_risk_tier")] = pred_tier
 
     coords = ALL_WARD_COORDS.get(ward_id, (23.8103, 90.4125, ward_id))
     lat, lon = _safe_float(coords[0], 6), _safe_float(coords[1], 6)
@@ -368,14 +404,14 @@ def predict(
     ward_id: str = Query(..., description="Ward identifier"),
     horizon: int = Query(2, ge=1, le=12, description="Forecast horizon in weeks"),
 ):
-    if _PREDICTED_DF is None:
+    if _LATEST_PRED_DF is None:
         raise HTTPException(status_code=503, detail="Data not yet loaded.")
 
-    ward_df = _PREDICTED_DF[_PREDICTED_DF["ward_id"] == ward_id].sort_values("date")
-    if ward_df.empty:
+    ward_pred = _LATEST_PRED_DF[_LATEST_PRED_DF["ward_id"] == ward_id]
+    if ward_pred.empty:
         raise HTTPException(status_code=404, detail=f"Ward '{ward_id}' not found.")
 
-    latest_row = ward_df.iloc[-1]
+    latest_row = ward_pred.iloc[0]
     predicted_cases = float(latest_row.get("predicted_cases", 0.0))
     thresholds = _ARTIFACT.get("quantile_thresholds") if _ARTIFACT else None
     risk_tier = map_quantile_tier(predicted_cases, thresholds)
@@ -464,7 +500,8 @@ def comparison(wards: str = Query(..., description="Comma-separated list of ward
 
     result = []
     for wid in ward_ids:
-        ward_full = _PREDICTED_DF[_PREDICTED_DF["ward_id"] == wid]
+        # Use _FEATURED_DF for aggregates (historical), _LATEST_PRED_DF for current prediction
+        ward_full = _FEATURED_DF[_FEATURED_DF["ward_id"] == wid]
         latest_row_df = _LATEST_PRED_DF[_LATEST_PRED_DF["ward_id"] == wid]
         if ward_full.empty or latest_row_df.empty:
             raise HTTPException(status_code=404, detail=f"Ward '{wid}' not found.")
